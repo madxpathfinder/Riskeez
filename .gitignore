@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Build outputs
+build/
+dist/
+backend/dist/
+coverage/
+
+# Environment files
+.env
+.env.*
+backend/.env
+backend/.env.*
+!.env.example
+!backend/.env.example
+
+# Logs
+*.log
+logs/
+backend/logs/
+
+# Uploads / runtime data
+uploads/
+backend/uploads/
+storage/
+backend/storage/
+backups/
+backend/backups/
+
+# Database dumps / backups
+*.sql
+*.dump
+*.backup
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+.cache/

@@ -1,0 +1,6 @@
+{
+  "name": "Riskeez",
+  "description": "Riskeez - Risk management, made easy. An AI-powered GRC-lite company risk assessment web application for SMEs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["AI Risk Analysis", "Risk Scoring", "Management Reporting"]
+}

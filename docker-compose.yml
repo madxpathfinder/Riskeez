@@ -1,0 +1,77 @@
+services:
+  riskeez-postgres:
+    image: postgres:15-alpine
+    container_name: riskeez-postgres
+    environment:
+      POSTGRES_USER: riskeez
+      POSTGRES_PASSWORD: riskeez_password
+      POSTGRES_DB: riskeez
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U riskeez"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  riskeez-ollama:
+    image: ollama/ollama:latest
+    container_name: riskeez-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Note: For GPU support, you need the nvidia-container-toolkit installed 
+    # and additional compose configuration for deploy.resources.reservations
+
+  riskeez-minio:
+    image: minio/minio:latest
+    container_name: riskeez-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: riskeez_minio_key
+      MINIO_ROOT_PASSWORD: riskeez_minio_secret
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  riskeez-backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: riskeez-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://riskeez:riskeez_password@riskeez-postgres:5432/riskeez
+      - AI_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://riskeez-ollama:11434
+      - OLLAMA_MODEL=llama3.1
+      - STORAGE_PROVIDER=local
+      - MINIO_ENDPOINT=http://riskeez-minio:9000
+    depends_on:
+      riskeez-postgres:
+        condition: service_healthy
+      riskeez-ollama:
+        condition: service_started
+
+  riskeez-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riskeez-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3001
+    depends_on:
+      - riskeez-backend
+
+volumes:
+  postgres_data:
+  ollama_data:
+  minio_data:
