@@ -15,10 +15,11 @@ A self-hosted **Risk Management & GRC (Governance, Risk and Compliance)** platfo
 7. [Faydalı Əmrlər](#7-faydalı-əmrlər)
 8. [Yeni Xüsusiyyətlər](#8-yeni-xüsusiyyətlər)
 9. [Risk Qiymətləndirmə Sistemi](#9-risk-qiymətləndirmə-sistemi)
-10. [Deployment (package.sh)](#10-deployment-packagesh)
-11. [Sessiya Təhlükəsizliyi](#11-sessiya-təhlükəsizliyi)
-12. [URL Strukturu](#12-url-strukturu)
-13. [Architecture](#14-architecture)
+10. [Git ilə Deployment](#10-git-ilə-deployment)
+11. [Deployment (package.sh)](#11-deployment-packagesh)
+12. [Sessiya Təhlükəsizliyi](#12-sessiya-təhlükəsizliyi)
+13. [URL Strukturu](#13-url-strukturu)
+14. [Architecture](#14-architecture)
 
 ---
 
@@ -501,7 +502,180 @@ POST /api/assessments/:id/report
 
 ---
 
-## 10. Deployment (package.sh)
+## 10. Git ilə Deployment
+
+Bu bölmə kodun **developer maşınından GitHub-a** necə push ediləcəyini, **Ubuntu serverlərdə** (test və prod) necə qurulacağını və sonraki yeniləmələrin necə aparılacağını izah edir.
+
+---
+
+### Branch strategiyası
+
+```
+main     ──►  Prod server   (istehsal mühiti)
+develop  ──►  Test server   (sınaq mühiti)
+```
+
+- Bütün yeni dəyişikliklər əvvəlcə `develop` branch-ına push edilir → Test serverdə yoxlanılır
+- Test keçdikdən sonra `develop` → `main`-ə merge edilir → Prod serverə deploy edilir
+
+---
+
+### DEV MAŞIN: GitHub-a push etmək
+
+#### İlk dəfə (yalnız bir dəfə)
+
+```bash
+# 1. Repo-nu klonlayın (əgər hələ klonlanmayıbsa)
+git clone https://github.com/madxpathfinder/Riskeez.git /var/www/riskeez
+cd /var/www/riskeez
+
+# 2. develop branch-ını yaradın
+git checkout -b develop
+git push origin develop
+```
+
+#### Hər dəfə dəyişiklik etdikdən sonra
+
+```bash
+# 1. Hansı faylların dəyişdiyinə baxın
+git status
+
+# 2. Dəyişiklikləri stage-ə əlavə edin
+git add .
+
+# 3. Commit edin (mənalı mesaj yazın)
+git commit -m "feat: yeni xüsusiyyətin qısa təsviri"
+
+# 4. Develop branch-ına push edin
+git push origin develop
+```
+
+> **Qeyd:** GitHub şifrə istəyirsə, hesab şifrəsini deyil, **Personal Access Token** istifadə edin.
+> Token yaratmaq: GitHub → Settings → Developer settings → Personal access tokens → Generate new token → `repo` scope seçin.
+
+#### Test keçdikdən sonra — Prod-a merge etmək
+
+```bash
+# main branch-a keçin
+git checkout main
+
+# develop-dan merge edin
+git merge develop
+
+# Prod-a push edin
+git push origin main
+
+# Geri develop-a qayıdın
+git checkout develop
+```
+
+---
+
+### TEST SERVER: İlk qurulum (yalnız bir dəfə)
+
+Ubuntu serverinə SSH ilə qoşulun:
+
+```bash
+ssh user@test-server-ip
+```
+
+Sonra bu əmrləri icra edin:
+
+```bash
+# 1. Git quraşdırın (əgər yoxdursa)
+sudo apt-get update && sudo apt-get install -y git
+
+# 2. Repo-nu klonlayın
+sudo git clone https://github.com/madxpathfinder/Riskeez.git /var/www/riskeez
+
+# 3. develop branch-ına keçin
+cd /var/www/riskeez
+sudo git checkout develop
+
+# 4. Setup skriptini işə salın (interaktiv sihirbaz başlayır)
+sudo bash setup.sh
+```
+
+Sihirbaz soruşacaq:
+- Admin adı, e-poçt, şifrə
+- Təşkilat adı
+- Serverin IP ünvanı
+- Port nömrələri (standart: API=3001, Frontend=80)
+
+Setup tamamlandıqdan sonra brauzerinizdə `http://test-server-ip` ünvanını açın.
+
+---
+
+### PROD SERVER: İlk qurulum (yalnız bir dəfə)
+
+```bash
+ssh user@prod-server-ip
+
+# 1. Git quraşdırın
+sudo apt-get update && sudo apt-get install -y git
+
+# 2. Repo-nu klonlayın
+sudo git clone https://github.com/madxpathfinder/Riskeez.git /var/www/riskeez
+
+# 3. main branch-da olduğunuzu yoxlayın (standart olaraq main gəlir)
+cd /var/www/riskeez
+git branch   # → main
+
+# 4. Setup skriptini işə salın
+sudo bash setup.sh
+```
+
+---
+
+### YENİLƏMƏ: Kod dəyişikliyini serverə çəkmək
+
+İlk qurulumdan sonra hər yeniləmə üçün yalnız **deploy.sh** istifadə edin.
+
+**Test serverdə:**
+```bash
+sudo bash /var/www/riskeez/deploy.sh --branch develop
+```
+
+**Prod serverdə:**
+```bash
+sudo bash /var/www/riskeez/deploy.sh --branch main
+```
+
+`deploy.sh` avtomatik olaraq aşağıdakıları edir:
+1. `git pull` — ən son kodu çəkir
+2. `npm ci` — asılılıqları quraşdırır
+3. DB migrasiyalarını tətbiq edir
+4. `npm run build` — frontend-i build edir
+5. `pm2 restart` — API-ni yenidən başladır
+6. `nginx reload` — Nginx-i yeniləyir
+
+---
+
+### Tam iş axını (workflow)
+
+```
+Developer maşın
+      │
+      │  git add . && git commit && git push origin develop
+      ▼
+   GitHub (develop branch)
+      │
+      │  sudo bash deploy.sh --branch develop
+      ▼
+   Test server  ──── yoxlama ────► Problemi yox?
+                                         │
+                              git checkout main
+                              git merge develop
+                              git push origin main
+                                         │
+                              sudo bash deploy.sh --branch main
+                                         │
+                                    Prod server
+```
+
+---
+
+## 11. Deployment (package.sh)
 
 ### Paket yaratmaq
 
@@ -521,7 +695,7 @@ Bu əmr `dist/<AppName>-deploy.zip` adında bir deployment paketi yaradır. Məs
 | `dist/` (build edilmiş frontend) | `.env` (gizli konfiqurasiyanı içərir) |
 | `setup.sh` | `logs/` |
 | `README.md` | Müvəqqəti fayllar |
-| `ecosystem.config.js` | |
+| `ecosystem.config.cjs` | |
 | `nginx.riskeez.conf` | |
 | `backend/*.sql` (mirasiya faylları) | |
 | `backend/.env.example` | |
@@ -555,7 +729,7 @@ Setup.sh aşağıdakıları avtomatik edir:
 
 ---
 
-## 11. Sessiya Təhlükəsizliyi
+## 12. Sessiya Təhlükəsizliyi
 
 ### 12 Saatlıq Avtomatik Çıxış
 
@@ -579,7 +753,7 @@ Sessiya bitdikdə ekranda:
 
 ---
 
-## 12. URL Strukturu
+## 13. URL Strukturu
 
 Platforma **React Router** əsaslı təmiz URL-lərdən istifadə edir:
 
