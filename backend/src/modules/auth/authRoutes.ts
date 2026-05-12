@@ -9,10 +9,20 @@ export const authRouter = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'riskeez-dev-secret';
 
+// Normalize DB role strings to match frontend Role enum values
+function normalizeRole(role: string): string {
+  switch (role.toLowerCase().replace(/[\s_-]/g, '')) {
+    case 'admin': return 'Admin';
+    case 'riskmanager': return 'Risk Manager';
+    case 'auditor': return 'Auditor';
+    default: return 'Viewer';
+  }
+}
+
 // GET /api/auth/setup/status
 authRouter.get('/setup/status', async (req, res) => {
   try {
-    const result = await db.query(`SELECT COUNT(*) FROM users WHERE role = 'admin'`);
+    const result = await db.query(`SELECT COUNT(*) FROM users WHERE LOWER(role) = 'admin'`);
     const adminCount = parseInt(result.rows[0].count, 10);
     res.json({ isInitialized: adminCount > 0 });
   } catch {
@@ -28,7 +38,7 @@ authRouter.post('/setup/initial-admin', async (req, res) => {
       return res.status(400).json({ error: 'name, email, and organizationName are required' });
     }
 
-    const existing = await db.query(`SELECT id FROM users WHERE role = 'admin' LIMIT 1`);
+    const existing = await db.query(`SELECT id FROM users WHERE LOWER(role) = 'admin' LIMIT 1`);
     if (existing.rowCount && existing.rowCount > 0) {
       return res.status(409).json({ error: 'Admin already exists' });
     }
@@ -43,12 +53,12 @@ authRouter.post('/setup/initial-admin', async (req, res) => {
     const userId = uuidv4();
     await db.query(
       `INSERT INTO users (id, organization_id, name, email, password_hash, role, status)
-       VALUES ($1, $2, $3, $4, $5, 'admin', 'active')`,
+       VALUES ($1, $2, $3, $4, $5, 'Admin', 'Active')`,
       [userId, orgId, name, email, hash]
     );
 
-    const user = { id: userId, name, email, role: 'admin', organizationId: orgId };
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+    const user = { id: userId, name, email, role: 'Admin', organizationId: orgId };
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '12h' });
     res.status(201).json({ token, user });
   } catch (err: any) {
     console.error('[Auth] setup error:', err.message);
@@ -76,7 +86,7 @@ authRouter.post('/login', async (req, res) => {
 
     const row = result.rows[0];
 
-    if (row.status !== 'active') {
+    if (row.status && row.status.toLowerCase() !== 'active') {
       return res.status(403).json({ error: 'Account is disabled' });
     }
 
@@ -97,13 +107,13 @@ authRouter.post('/login', async (req, res) => {
       id: row.id,
       name: row.name,
       email: row.email,
-      role: row.role,
+      role: normalizeRole(row.role),
       organizationId: row.organization_id,
       status: row.status,
       forcePasswordChange: row.force_password_change
     };
 
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '12h' });
     res.json({ token, user });
   } catch (err: any) {
     console.error('[Auth] login error:', err.message);
@@ -139,7 +149,7 @@ authRouter.get('/me', authMiddleware, async (req, res) => {
         id: row.id,
         name: row.name,
         email: row.email,
-        role: row.role,
+        role: normalizeRole(row.role),
         organizationId: row.organization_id,
         status: row.status
       }

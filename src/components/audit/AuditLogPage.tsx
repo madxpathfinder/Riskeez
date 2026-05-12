@@ -39,8 +39,8 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
     try {
       const data = await auditLogService.getLogs();
       setLogs(data);
-    } catch {
-      toastError('Sync Error', 'Unable to retrieve system audit trails.');
+    } catch (err: any) {
+      toastError('Sync Error', err?.message || 'Unable to retrieve audit logs.');
     } finally {
       setLoading(false);
     }
@@ -69,25 +69,29 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
   const handleExport = async () => {
     try {
       if (APP_CONFIG.DATA_PROVIDER === 'api') {
-        const token = localStorage.getItem('riskeez_token');
+        const token = localStorage.getItem('riskeez_jwt');
         const params = new URLSearchParams();
         if (filterModule !== 'All') params.set('module', filterModule);
         if (filterSeverity !== 'All') params.set('severity', filterSeverity);
         if (startDate) params.set('startDate', startDate);
         if (endDate) params.set('endDate', endDate);
-        const res = await fetch(`/api/audit-logs/export.csv?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${APP_CONFIG.API_URL}/api/audit-logs/export.csv?${params}`, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) throw new Error('Export failed');
         const blob = await res.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `riskeez_audit_export_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
         link.click();
-        success('Export Seeded', 'The filtered audit trail has been extracted to CSV.');
+        success(t('audit.exportSeeded'), t('audit.exportSeededDesc'));
         await auditLogService.log('audit_log_exported', 'System', `Exported ${filteredLogs.length} audit records`, 'Medium', 'UI');
         return;
       }
       // localStorage fallback
-      const headers = ['Timestamp', 'Actor', 'Action', 'Module', 'Severity', 'Source', 'Details'];
+      const headers = [
+        t('audit.csvHeaders.timestamp'), t('audit.csvHeaders.actor'),
+        t('audit.csvHeaders.action'), t('audit.csvHeaders.module'),
+        t('audit.csvHeaders.severity'), t('audit.csvHeaders.source'), t('audit.csvHeaders.details')
+      ];
       const data = filteredLogs.map(l => [
         l.timestamp, l.userName, l.action, l.module, l.severity, l.source, l.details
       ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
@@ -97,9 +101,9 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
       link.href = URL.createObjectURL(blob);
       link.download = `riskeez_audit_export_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
       link.click();
-      success('Export Seeded', 'Audit trail extracted to CSV.');
+      success(t('audit.exportSeeded'), t('audit.exportSeededDesc'));
     } catch (e: any) {
-      toastError('Export Failed', e?.message || 'Could not export audit log.');
+      toastError(t('audit.exportFailed'), e?.message || t('audit.exportFailedDesc'));
     }
   };
 
@@ -126,10 +130,10 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
 
       <PageHeader
         title={t('audit.title')}
-        subtitle="Comprehensive observability ledger for configuration shifts, user interactions, and AI actions."
+        subtitle={t('audit.subtitle')}
         actions={
           <div className="flex gap-3">
-            <Button variant="secondary" icon={Clock} onClick={fetchLogs} className="h-11">Refresh</Button>
+            <Button variant="secondary" icon={Clock} onClick={fetchLogs} className="h-11">{t('audit.refresh')}</Button>
             <Button icon={Download} onClick={handleExport} className="h-11 shadow-saas font-black">{t('audit.exportAuditLog')}</Button>
           </div>
         }
@@ -143,7 +147,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
               type="text"
-              placeholder="Search actions, actors, details..."
+              placeholder={t('audit.searchPlaceholder')}
               className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-accent/5"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -155,7 +159,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
             <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
               type="text"
-              placeholder="Filter by user..."
+              placeholder={t('audit.filterByUser')}
               className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs font-black outline-none focus:ring-4 focus:ring-accent/5"
               value={filterUser}
               onChange={e => setFilterUser(e.target.value)}
@@ -170,11 +174,11 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
               value={filterSeverity}
               onChange={e => setFilterSeverity(e.target.value as any)}
             >
-              <option value="All">All Severities</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
+              <option value="All">{t('audit.allSeverities')}</option>
+              <option value="Low">{t('common.low')}</option>
+              <option value="Medium">{t('common.medium')}</option>
+              <option value="High">{t('common.high')}</option>
+              <option value="Critical">{t('common.critical')}</option>
             </select>
           </div>
 
@@ -186,7 +190,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
               value={filterModule}
               onChange={e => setFilterModule(e.target.value)}
             >
-              <option value="All">All Modules</option>
+              <option value="All">{t('audit.allModules')}</option>
               {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
@@ -194,7 +198,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
           {/* Status indicator */}
           <div className="flex items-center justify-center bg-slate-900 rounded-xl text-white px-4 py-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-2" />
-            <span className="text-[9px] font-black uppercase tracking-widest">{filteredLogs.length} Events</span>
+            <span className="text-[9px] font-black uppercase tracking-widest">{t('audit.eventsCount', { count: filteredLogs.length })}</span>
           </div>
         </div>
 
@@ -225,7 +229,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
               value={filterAction}
               onChange={e => setFilterAction(e.target.value)}
             >
-              <option value="">All Actions</option>
+              <option value="">{t('audit.allActions')}</option>
               {uniqueActions.map(a => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
             </select>
           </div>
@@ -234,7 +238,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
               onClick={clearFilters}
               className="flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-black text-slate-500 hover:text-rose-500 hover:border-rose-200 transition-all"
             >
-              <X size={12} /> Clear Filters
+              <X size={12} /> {t('audit.clearFilters')}
             </button>
           )}
         </div>
@@ -248,12 +252,12 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="pl-10 pr-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[200px]">Date / Time</th>
-                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Actor</th>
-                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Action & Module</th>
-                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Severity</th>
-                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Source</th>
-                  <th className="pl-4 pr-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Details</th>
+                  <th className="pl-10 pr-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[200px]">{t('audit.dateTime')}</th>
+                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('audit.actor')}</th>
+                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('audit.actionModule')}</th>
+                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{t('audit.severity')}</th>
+                  <th className="px-4 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">{t('audit.source')}</th>
+                  <th className="pl-4 pr-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">{t('audit.details')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -286,7 +290,7 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
                     </td>
                     <td className="px-4 py-6">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-800 tracking-tight">{(log.action || '').replace(/_/g, ' ').toUpperCase()}</span>
+                        <span className="text-xs font-black text-slate-800 tracking-tight">{t('audit.actions.' + log.action) || (log.action || '').replace(/_/g, ' ').toUpperCase()}</span>
                         <div className="mt-1 flex items-center gap-2">
                           <Badge color="slate" className="text-[8px] py-0 px-1.5">{log.module}</Badge>
                           {log.entityId && <span className="text-[9px] text-slate-400 font-bold">#{(log.entityId || '').slice(-6)}</span>}
@@ -318,9 +322,9 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mx-auto mb-4 border border-slate-100">
               <Search size={32} />
             </div>
-            <h3 className="text-base font-black text-slate-900 tracking-tight">No matching audit events</h3>
-            <p className="text-sm font-bold text-slate-400 mt-1 max-w-xs mx-auto">Adjust your filters or search keywords.</p>
-            <Button variant="ghost" onClick={clearFilters} className="mt-6 font-black uppercase text-[10px] tracking-widest">Clear All Filters</Button>
+            <h3 className="text-base font-black text-slate-900 tracking-tight">{t('audit.noEvents')}</h3>
+            <p className="text-sm font-bold text-slate-400 mt-1 max-w-xs mx-auto">{t('audit.noEventsDesc')}</p>
+            <Button variant="ghost" onClick={clearFilters} className="mt-6 font-black uppercase text-[10px] tracking-widest">{t('audit.clearAllFilters')}</Button>
           </div>
         )}
       </Card>
@@ -331,10 +335,8 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
             <ShieldCheck size={28} />
           </div>
           <div>
-            <h4 className="text-lg font-black tracking-tight mb-1">Journal Integrity Disclaimer</h4>
-            <p className="text-xs text-slate-400 font-bold leading-relaxed max-w-xl">
-              In a production environment, audit logs are append-only and stored in tamper-evident storage. This journal provides institutional transparency and requires formal retention policies for regulatory compliance.
-            </p>
+            <h4 className="text-lg font-black tracking-tight mb-1">{t('audit.integrityDisclaimer')}</h4>
+            <p className="text-xs text-slate-400 font-bold leading-relaxed max-w-xl">{t('audit.integrityText')}</p>
           </div>
         </div>
         <div className="relative z-10 text-right shrink-0">
@@ -351,7 +353,9 @@ export const AuditLogPage = ({ onNavigate }: { onNavigate?: (tab: string) => voi
   );
 };
 
-const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }) => (
+const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }) => {
+  const { t } = useLanguage();
+  return (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -365,7 +369,7 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
             <Activity size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-black text-slate-900 tracking-tight">Audit Event Profile</h3>
+            <h3 className="text-lg font-black text-slate-900 tracking-tight">{t('audit.eventProfile')}</h3>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">ID: {log.id}</p>
           </div>
         </div>
@@ -377,7 +381,7 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
       <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh] no-scrollbar">
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-1.5">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Actor</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('audit.actor')}</p>
             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
               <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[10px] font-black text-slate-400 shadow-sm">
                 {(log.userName || 'S').charAt(0)}
@@ -389,7 +393,7 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
             </div>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Timestamp</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('audit.dateTime')}</p>
             <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
               <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><Clock size={14} /></div>
               <p className="text-xs font-black text-slate-900">
@@ -417,17 +421,17 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
 
         {log.metadata && (
           <div className="space-y-4">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Metadata</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t('audit.metadata')}</p>
             {log.metadata.before && log.metadata.after && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase mb-1 pl-2">Before</p>
+                  <p className="text-[8px] font-black text-slate-400 uppercase mb-1 pl-2">{t('audit.before')}</p>
                   <pre className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[9px] font-mono whitespace-pre-wrap overflow-x-auto text-slate-500">
                     {JSON.stringify(log.metadata.before, null, 2)}
                   </pre>
                 </div>
                 <div>
-                  <p className="text-[8px] font-black text-accent uppercase mb-1 pl-2">After</p>
+                  <p className="text-[8px] font-black text-accent uppercase mb-1 pl-2">{t('audit.after')}</p>
                   <pre className="p-4 bg-accent/5 border border-accent/10 rounded-2xl text-[9px] font-mono whitespace-pre-wrap overflow-x-auto text-accent">
                     {JSON.stringify(log.metadata.after, null, 2)}
                   </pre>
@@ -438,7 +442,7 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
               <div className="flex items-center gap-4 p-5 bg-accent/5 border border-accent/10 rounded-2xl">
                 <Bot size={20} className="text-accent" />
                 <div>
-                  <p className="text-xs font-black text-slate-900">AI Synthesized Action</p>
+                  <p className="text-xs font-black text-slate-900">{t('audit.aiAction')}</p>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
                     {log.metadata.aiProvider} • {log.metadata.aiModel}
                   </p>
@@ -450,8 +454,9 @@ const AuditLogDetail = ({ log, onClose }: { log: AuditLog; onClose: () => void }
       </div>
 
       <div className="px-10 py-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-        <Button variant="ghost" onClick={onClose} className="font-black text-[10px] tracking-widest uppercase">Dismiss</Button>
+        <Button variant="ghost" onClick={onClose} className="font-black text-[10px] tracking-widest uppercase">{t('audit.dismiss')}</Button>
       </div>
     </motion.div>
   </div>
-);
+  );
+};

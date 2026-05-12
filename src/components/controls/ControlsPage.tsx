@@ -9,6 +9,8 @@ import { Control, ControlStatus, ControlEffectiveness } from '../../types';
 import { auditLogService as auditService } from '../../services/auditLogService';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Permission } from '../../services/permissionService';
 import { APP_CONFIG } from '../../config/appConfig';
 import { api } from '../../services/apiClient';
 
@@ -272,7 +274,10 @@ interface ControlsPageProps {
 export const ControlsPage = ({ store, onNavigate }: ControlsPageProps) => {
   const { t } = useLanguage();
   const { success, error: toastError } = useToast();
+  const { hasPermission } = useAuth();
   const { controls, risks, addControl, updateControl, deleteControl, isLoading } = store;
+  const canCreate = hasPermission(Permission.CONTROLS_CREATE);
+  const canDelete = hasPermission(Permission.CONTROLS_DELETE);
 
   const [search, setSearch]                 = useState('');
   const [filterStatus, setFilterStatus]     = useState('All');
@@ -340,8 +345,8 @@ export const ControlsPage = ({ store, onNavigate }: ControlsPageProps) => {
     if (!ctrl.fileName) return;
     if (APP_CONFIG.DATA_PROVIDER === 'api') {
       try {
-        const token = localStorage.getItem('riskeez_token');
-        const res = await fetch(`/api/controls/${ctrl.id}/download`, {
+        const token = localStorage.getItem('riskeez_jwt');
+        const res = await fetch(`${APP_CONFIG.API_URL}/api/controls/${ctrl.id}/download`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Download failed');
@@ -380,7 +385,7 @@ export const ControlsPage = ({ store, onNavigate }: ControlsPageProps) => {
             const b = new Blob([csv], { type: 'text/csv' });
             const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'controls.csv'; a.click();
           }}>{t('common.export')}</Button>
-          <Button icon={Plus} className="h-11 px-6 font-black shadow-saas" onClick={() => { setEditControl(null); setShowModal(true); }}>{t('controls.addControl')}</Button>
+          {canCreate && <Button icon={Plus} className="h-11 px-6 font-black shadow-saas" onClick={() => { setEditControl(null); setShowModal(true); }}>{t('controls.addControl')}</Button>}
         </div>
       </div>
 
@@ -536,8 +541,8 @@ export const ControlsPage = ({ store, onNavigate }: ControlsPageProps) => {
                       </td>
                       <td className="pl-4 pr-10 py-6 text-right">
                         <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                          <Button variant="ghost" size="sm" icon={Activity} className="w-8 h-8 p-0 rounded-xl hover:bg-white text-slate-400" onClick={e => { e.stopPropagation(); setEditControl(c); setShowModal(true); }} />
-                          <Button variant="ghost" size="sm" icon={Trash2} className="w-8 h-8 p-0 rounded-xl hover:bg-rose-50 text-rose-400" onClick={e => { e.stopPropagation(); setDeleteId(c.id); }} />
+                          {canCreate && <Button variant="ghost" size="sm" icon={Activity} className="w-8 h-8 p-0 rounded-xl hover:bg-white text-slate-400" onClick={e => { e.stopPropagation(); setEditControl(c); setShowModal(true); }} />}
+                          {canDelete && <Button variant="ghost" size="sm" icon={Trash2} className="w-8 h-8 p-0 rounded-xl hover:bg-rose-50 text-rose-400" onClick={e => { e.stopPropagation(); setDeleteId(c.id); }} />}
                         </div>
                       </td>
                     </tr>

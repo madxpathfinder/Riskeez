@@ -113,7 +113,7 @@ export const Header = ({
           <div className="h-6 w-px bg-slate-100 mx-2 hidden lg:block" />
           
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] hidden md:flex items-center gap-3">
-             <span className="opacity-80 text-slate-900">{organization?.name || 'Riskeez Enterprise'}</span>
+             <span className="opacity-80 text-slate-900">{organization?.name || organization?.appName || t('app.loginTitle')}</span>
              <ChevronRight size={12} className="text-slate-300" strokeWidth={3} />
              <span className={`font-bold transition-colors ${subLabel ? 'text-slate-400' : 'text-slate-600'}`}>
                {getActiveTabLabel()}

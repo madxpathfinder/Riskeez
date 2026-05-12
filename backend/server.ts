@@ -23,18 +23,54 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(helmet());
-app.use(cors({ origin: process.env.ALLOWED_ORIGIN || '*' }));
-app.use(express.json({ limit: '10mb' }));
+
+// CORS — allow one or more space-separated origins from ALLOWED_ORIGIN env var
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || '*')
+  .split(' ')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+    return cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Raise body limit for base64 file uploads (50 MB decoded ≈ ~67 MB base64)
+app.use(express.json({ limit: '70mb' }));
 
 // Health
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 app.get('/health', (req, res) => res.json({ status: 'ok', environment: process.env.NODE_ENV || 'production' }));
 
+// Public branding (no auth) — returns app name for login page
+app.get('/api/branding', async (req, res) => {
+  try {
+    const { db } = await import('./src/db.js');
+    const result = await db.query(`SELECT name, app_name FROM organizations LIMIT 1`);
+    if (result.rows.length === 0) {
+      return res.json({ appName: process.env.APP_NAME || 'Risk Platform' });
+    }
+    const row = result.rows[0];
+    res.json({ appName: row.app_name || process.env.APP_NAME || row.name || 'Risk Platform' });
+  } catch {
+    res.json({ appName: process.env.APP_NAME || 'Risk Platform' });
+  }
+});
+
 // Setup status (used by frontend before login)
 app.get('/api/setup/status', async (req, res) => {
   try {
     const { db } = await import('./src/db.js');
-    const result = await db.query(`SELECT COUNT(*) FROM users WHERE role = 'admin'`);
+    const result = await db.query(`SELECT COUNT(*) FROM users WHERE LOWER(role) = 'admin'`);
     res.json({ isInitialized: parseInt(result.rows[0].count, 10) > 0 });
   } catch {
     res.json({ isInitialized: false });
@@ -63,7 +99,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 app.listen(PORT, () => {
-  console.log(`[Riskeez API] Running on port ${PORT}`);
+  console.log(`[GRC API] Running on port ${PORT}`);
 });
 
 export default app;

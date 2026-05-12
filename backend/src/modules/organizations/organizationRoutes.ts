@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 
 export const organizationRouter = Router();
 organizationRouter.use(authMiddleware);
@@ -8,6 +8,7 @@ organizationRouter.use(authMiddleware);
 const toOrg = (row: any) => ({
   id: row.id,
   name: row.name,
+  appName: row.app_name || null,
   industry: row.industry,
   size: row.size,
   region: row.region,
@@ -36,21 +37,21 @@ organizationRouter.get('/current', async (req, res) => {
 });
 
 // PUT /api/organizations/current
-organizationRouter.put('/current', async (req, res) => {
+organizationRouter.put('/current', requirePermission('organization:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     const {
-      name, industry, size, region, country, description,
+      name, appName, industry, size, region, country, description,
       email, website, address, timezone, defaultLanguage, departments, employeeCount
     } = req.body;
 
     const result = await db.query(
       `UPDATE organizations SET
-         name=$1, industry=$2, size=$3, region=$4, country=$5, description=$6,
-         email=$7, website=$8, address=$9, timezone=$10, default_language=$11,
-         departments=$12, employee_count=$13
-       WHERE id=$14 RETURNING *`,
-      [name, industry, size, region, country, description || null,
+         name=$1, app_name=$2, industry=$3, size=$4, region=$5, country=$6, description=$7,
+         email=$8, website=$9, address=$10, timezone=$11, default_language=$12,
+         departments=$13, employee_count=$14
+       WHERE id=$15 RETURNING *`,
+      [name, appName || null, industry, size, region, country, description || null,
        email || null, website || null, address || null,
        timezone || 'UTC', defaultLanguage || 'en',
        JSON.stringify(departments || []), employeeCount || null,

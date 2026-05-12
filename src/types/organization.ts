@@ -1,6 +1,7 @@
 export interface Organization {
   id: string;
   name: string;
+  appName?: string;
   industry?: string;
   size?: string;
   employeeCount?: number;

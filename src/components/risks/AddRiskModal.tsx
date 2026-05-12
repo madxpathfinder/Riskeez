@@ -16,6 +16,7 @@ export const AddRiskModal = ({ onClose, onSave }: AddRiskModalProps) => {
     title: '',
     description: '',
     category: RISK_CATEGORIES[0],
+    department: '',
     owner: '',
     status: RiskStatus.OPEN,
     likelihood: 3,
@@ -110,14 +111,25 @@ export const AddRiskModal = ({ onClose, onSave }: AddRiskModalProps) => {
 
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('common.owner')}*</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 className={`w-full bg-slate-50 border ${errors.owner ? 'border-rose-300' : 'border-slate-100'} rounded-xl px-5 py-3 text-sm font-black focus:bg-white focus:ring-4 focus:ring-accent/10 outline-none transition-all`}
                 placeholder="Name or Department"
                 value={formData.owner}
                 onChange={e => setFormData({ ...formData, owner: e.target.value })}
               />
               {errors.owner && <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1"><AlertCircle size={10} /> {errors.owner}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('riskRegister.department')}</label>
+              <input
+                type="text"
+                className="w-full bg-slate-50 border border-slate-100 rounded-xl px-5 py-3 text-sm font-black focus:bg-white focus:ring-4 focus:ring-accent/10 outline-none transition-all"
+                placeholder="e.g. IT, Finance, HR"
+                value={formData.department}
+                onChange={e => setFormData({ ...formData, department: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">

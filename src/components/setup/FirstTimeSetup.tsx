@@ -5,6 +5,7 @@ import { Button, Card } from '../common';
 import { userService } from '../../services/userService';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
 
 interface FirstTimeSetupProps {
   onComplete: () => void;
@@ -12,6 +13,7 @@ interface FirstTimeSetupProps {
 
 export const FirstTimeSetup = ({ onComplete }: FirstTimeSetupProps) => {
   const { refreshState } = useAuth();
+  const { appName } = useBranding();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     orgName: '',
@@ -86,7 +88,7 @@ export const FirstTimeSetup = ({ onComplete }: FirstTimeSetupProps) => {
               <Shield size={32} />
            </div>
            <h1 className="text-3xl font-black text-slate-900 tracking-tight">System Initialization</h1>
-           <p className="text-slate-500 font-medium mt-2">Set up your Riskeez environment for {formData.orgName || 'your enterprise'}</p>
+           <p className="text-slate-500 font-medium mt-2">Set up your {appName} environment for {formData.orgName || 'your enterprise'}</p>
         </div>
 
         <Card className="p-8 border-slate-200 shadow-xl rounded-[2rem]">

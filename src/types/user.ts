@@ -1,12 +1,14 @@
 export enum Role {
-  ADMIN = 'Admin',
-  RISK_MANAGER = 'Risk Manager',
-  AUDITOR = 'Auditor',
-  VIEWER = 'Viewer'
+  SUPER_ADMIN       = 'Super Admin',
+  ADMIN             = 'Admin',             // Organization Admin
+  RISK_MANAGER      = 'Risk Manager',
+  AUDITOR           = 'Auditor',           // Compliance Officer / Auditor
+  CONTRIBUTOR       = 'Contributor',       // Department user
+  VIEWER            = 'Viewer',            // CEO / Read-only
 }
 
 export enum UserStatus {
-  ACTIVE = 'Active',
+  ACTIVE   = 'Active',
   DISABLED = 'Disabled'
 }
 

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 
 export const assessmentRouter = Router();
 assessmentRouter.use(authMiddleware);
@@ -70,31 +70,43 @@ const toAnswer = (row: any) => ({
 });
 
 // ─────────────────────────────────────────────
-// Score helpers
+// Score helpers  (new algorithm: Yes=0, Partial=2, No=4, N/A=excluded)
+// riskPct = Σ(answer_score × weight) / Σ(4 × weight) × 100
+// 0-25 → low, 26-50 → medium, 51-75 → high, 76-100 → critical
 // ─────────────────────────────────────────────
+const ANSWER_SCORE: Record<string, number> = {
+  'yes': 0, 'bəli': 0,
+  'partial': 2, 'qismən': 2,
+  'no': 4, 'xeyr': 4,
+};
+
 const calculateScore = (
   answers: any[],
   questions: Array<{ id: string; weight: number }>,
 ): number => {
-  const nonNA = answers.filter((a) => a.answer?.toLowerCase() !== 'n/a');
-  if (!nonNA.length) return 0;
-  const totalWeight = nonNA.reduce((sum, a) => {
+  const included = answers.filter((a) => {
+    const v = (a.answer || '').toLowerCase();
+    return v !== 'n/a' && v !== '';
+  });
+  if (!included.length) return 0;
+
+  let numerator = 0;
+  let denominator = 0;
+  for (const a of included) {
     const q = questions.find((q) => q.id === a.question_id);
-    return sum + (q?.weight || 3);
-  }, 0);
-  const yesWeight = nonNA
-    .filter((a) => a.answer?.toLowerCase() === 'yes')
-    .reduce((sum, a) => {
-      const q = questions.find((q) => q.id === a.question_id);
-      return sum + (q?.weight || 3);
-    }, 0);
-  return totalWeight > 0 ? Math.round((yesWeight / totalWeight) * 100) : 0;
+    const w = q?.weight || 3;
+    const v = (a.answer || '').toLowerCase();
+    const answerScore = ANSWER_SCORE[v] ?? 0;
+    numerator   += answerScore * w;
+    denominator += 4 * w;
+  }
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 };
 
 const scoreToLevel = (score: number): string => {
-  if (score <= 25) return 'critical';
-  if (score <= 50) return 'high';
-  if (score <= 75) return 'medium';
+  if (score >= 76) return 'critical';
+  if (score >= 51) return 'high';
+  if (score >= 26) return 'medium';
   return 'low';
 };
 
@@ -103,7 +115,7 @@ const scoreToLevel = (score: number): string => {
 // ─────────────────────────────────────────────
 const generateInferredRisks = (
   answers: any[],
-  questions: Array<{ id: string; category: string; text: string; weight: number }>,
+  questions: Array<{ id: string; category: string; text: string; weight: number; suggested_mitigation?: string }>,
 ): any[] => {
   const categories = [...new Set(questions.map((q) => q.category))];
   const risks: any[] = [];
@@ -111,36 +123,48 @@ const generateInferredRisks = (
   for (const cat of categories) {
     const catQuestions = questions.filter((q) => q.category === cat);
     const catAnswers = answers.filter((a) => catQuestions.find((q) => q.id === a.question_id));
-    const noAnswers = catAnswers.filter((a) => a.answer?.toLowerCase() === 'no');
+    const riskyAnswers = catAnswers.filter((a) => {
+      const v = (a.answer || '').toLowerCase();
+      return v === 'no' || v === 'xeyr' || v === 'partial' || v === 'qismən';
+    });
+    const noAnswers = catAnswers.filter((a) => {
+      const v = (a.answer || '').toLowerCase();
+      return v === 'no' || v === 'xeyr';
+    });
 
-    if (noAnswers.length === 0) continue;
+    if (riskyAnswers.length === 0) continue;
+    const riskyRatio = riskyAnswers.length / catAnswers.length;
+    if (riskyRatio < 0.25) continue;
+
     const noRatio = noAnswers.length / catAnswers.length;
-    if (noRatio < 0.3) continue;
-
     const likelihood = noRatio > 0.7 ? 4 : noRatio > 0.5 ? 3 : 2;
     const impact = noRatio > 0.7 ? 5 : noRatio > 0.5 ? 4 : 3;
     const score = likelihood * impact;
     const level =
       score >= 16 ? 'critical' : score >= 10 ? 'high' : score >= 5 ? 'medium' : 'low';
 
+    const mitigations = riskyAnswers
+      .map((a: any) => catQuestions.find((q) => q.id === a.question_id)?.suggested_mitigation)
+      .filter(Boolean)
+      .slice(0, 3) as string[];
+
     risks.push({
-      title: `${cat} Risk Gap`,
+      title: `${cat} — Risk Boşluğu`,
       category: cat,
-      reason: `${noAnswers.length} of ${catAnswers.length} ${cat} controls failed (${Math.round(noRatio * 100)}% non-compliance)`,
+      reason: `${riskyAnswers.length} / ${catAnswers.length} ${cat} nəzarəti uğursuz olmuşdur (${Math.round(riskyRatio * 100)}% uyğunsuzluq)`,
       likelihood,
       impact,
       score,
       level,
-      missingEvidence: noAnswers
+      missingEvidence: riskyAnswers
         .map((a: any) => {
           const q = catQuestions.find((q) => q.id === a.question_id);
           return q?.text || a.question_id;
         })
         .slice(0, 3),
-      suggestedControls: [
-        `Implement ${cat} controls`,
-        `Review and remediate failed checks`,
-      ],
+      suggestedControls: mitigations.length > 0
+        ? mitigations
+        : [`${cat} nəzarət tədbirlərini tətbiq edin`, 'Uğursuz yoxlamaları nəzərdən keçirin və düzəldin'],
     });
   }
 
@@ -179,13 +203,48 @@ const auditLog = async (
 };
 
 // ─────────────────────────────────────────────
-// GET /questions  (must be before /:id to avoid collision)
+// GET /categories
 // ─────────────────────────────────────────────
-assessmentRouter.get('/questions', async (_req: Request, res: Response) => {
+assessmentRouter.get('/categories', async (_req: Request, res: Response) => {
   try {
     const result = await db.query(
-      `SELECT * FROM assessment_questions WHERE active = true ORDER BY category, id`,
+      `SELECT c.key, c.name_az, c.name_en, c.description, c.sort_order,
+              COUNT(q.id) AS question_count
+       FROM assessment_question_categories c
+       LEFT JOIN assessment_questions q ON q.category_key = c.key AND q.active = true
+       GROUP BY c.key, c.name_az, c.name_en, c.description, c.sort_order
+       ORDER BY c.sort_order`,
     );
+    return res.json({ categories: result.rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /questions  (must be before /:id to avoid collision)
+// ?categories=it_cybersecurity,compliance  — comma-separated keys
+// ─────────────────────────────────────────────
+assessmentRouter.get('/questions', async (req: Request, res: Response) => {
+  try {
+    const rawCats = (req.query.categories as string | undefined) || '';
+    const catKeys = rawCats
+      ? rawCats.split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    let result;
+    if (catKeys.length > 0) {
+      result = await db.query(
+        `SELECT * FROM assessment_questions
+         WHERE active = true AND category_key = ANY($1::text[])
+         ORDER BY category_key, id`,
+        [catKeys],
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM assessment_questions WHERE active = true ORDER BY category_key, id`,
+      );
+    }
 
     if (result.rows.length > 0) {
       return res.json({ questions: result.rows });
@@ -217,7 +276,7 @@ assessmentRouter.get('/', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 // POST /
 // ─────────────────────────────────────────────
-assessmentRouter.post('/', async (req: Request, res: Response) => {
+assessmentRouter.post('/', requirePermission('assessments:create'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const { title, scope, description, framework, startedBy } = req.body;
@@ -291,7 +350,7 @@ assessmentRouter.get('/:id', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 // PUT /:id
 // ─────────────────────────────────────────────
-assessmentRouter.put('/:id', async (req: Request, res: Response) => {
+assessmentRouter.put('/:id', requirePermission('assessments:update'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const { id } = req.params;
@@ -333,7 +392,7 @@ assessmentRouter.get('/:id/answers', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 // POST /:id/answers  (upsert)
 // ─────────────────────────────────────────────
-assessmentRouter.post('/:id/answers', async (req: Request, res: Response) => {
+assessmentRouter.post('/:id/answers', requirePermission('assessments:update'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const { id } = req.params;
@@ -392,7 +451,7 @@ assessmentRouter.post('/:id/answers', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 // POST /:id/complete
 // ─────────────────────────────────────────────
-assessmentRouter.post('/:id/complete', async (req: Request, res: Response) => {
+assessmentRouter.post('/:id/complete', requirePermission('assessments:update'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const { id } = req.params;
@@ -415,9 +474,9 @@ assessmentRouter.post('/:id/complete', async (req: Request, res: Response) => {
 
     // Fetch questions from DB; fall back to hardcoded list
     const qResult = await db.query(
-      `SELECT id, category, text, weight FROM assessment_questions WHERE active = true`,
+      `SELECT id, category, text, weight, suggested_mitigation FROM assessment_questions WHERE active = true`,
     );
-    const questions: Array<{ id: string; category: string; text: string; weight: number }> =
+    const questions: Array<{ id: string; category: string; text: string; weight: number; suggested_mitigation?: string }> =
       qResult.rows.length > 0 ? qResult.rows : FALLBACK_QUESTIONS;
 
     const score = calculateScore(answers, questions);
@@ -437,12 +496,49 @@ assessmentRouter.post('/:id/complete', async (req: Request, res: Response) => {
       [score, riskLevel, JSON.stringify(inferredRisks), id],
     );
 
+    // ── Promote inferred risks → risks table so dashboard counters update ──
+    for (const ir of inferredRisks) {
+      const likelihood = Math.min(5, Math.max(1, ir.likelihood || 3));
+      const impact     = Math.min(5, Math.max(1, ir.impact     || 3));
+      const rScore     = likelihood * impact;
+      const level      = rScore >= 16 ? 'Critical' : rScore >= 10 ? 'High' : rScore >= 5 ? 'Medium' : 'Low';
+
+      // Idempotent: skip if a risk with the same title already exists for this org
+      const dup = await db.query(
+        `SELECT id FROM risks WHERE organization_id = $1 AND title = $2 LIMIT 1`,
+        [user.organizationId, ir.title],
+      );
+      if (dup.rows.length > 0) continue;
+
+      await db.query(
+        `INSERT INTO risks
+           (id, organization_id, title, description, category, owner, status,
+            likelihood, impact, score, level, recommendation, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          `r-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          user.organizationId,
+          ir.title,
+          ir.reason || '',
+          ir.category || 'Assessment',
+          user.name || 'System',
+          'Open',
+          likelihood,
+          impact,
+          rScore,
+          level,
+          (ir.suggestedControls || []).join('; '),
+          `Auto-generated from assessment ${id}. Missing evidence: ${(ir.missingEvidence || []).slice(0, 3).join(', ')}`,
+        ],
+      );
+    }
+
     await auditLog(
       user.id,
       user.name,
       user.role,
       'assessment_completed',
-      `Assessment ${id} completed. Score: ${score}, Risk level: ${riskLevel}`,
+      `Assessment ${id} completed. Score: ${score}, Risk level: ${riskLevel}. ${inferredRisks.length} risks promoted to register.`,
     );
 
     return res.json({
@@ -546,14 +642,14 @@ assessmentRouter.post('/:id/report', async (req: Request, res: Response) => {
     const score = assessment.overall_score ?? assessment.score ?? 0;
     const riskLevel = assessment.risk_level || scoreToLevel(score);
 
-    const yesCount = answers.filter((a) => a.answer?.toLowerCase() === 'yes').length;
-    const noCount  = answers.filter((a) => a.answer?.toLowerCase() === 'no').length;
-    const naCount  = answers.filter((a) => a.answer?.toLowerCase() === 'n/a').length;
+    const LEVEL_AZ: Record<string, string> = {
+      critical: 'KRİTİK', high: 'YÜKSƏK', medium: 'ORTA', low: 'AŞAĞI',
+    };
 
-    const answerSummaryLines = answers
-      .slice(0, 20)
-      .map((a) => `  - [${(a.answer || '').toUpperCase()}] ${a.question_id}${a.notes ? ` — ${a.notes}` : ''}`)
-      .join('\n');
+    const yesCount     = answers.filter((a) => ['yes','bəli'].includes((a.answer||'').toLowerCase())).length;
+    const partialCount = answers.filter((a) => ['partial','qismən'].includes((a.answer||'').toLowerCase())).length;
+    const noCount      = answers.filter((a) => ['no','xeyr'].includes((a.answer||'').toLowerCase())).length;
+    const naCount      = answers.filter((a) => (a.answer||'').toLowerCase() === 'n/a').length;
 
     const inferredRisks: any[] = Array.isArray(assessment.inferred_risks)
       ? assessment.inferred_risks
@@ -563,36 +659,33 @@ assessmentRouter.post('/:id/report', async (req: Request, res: Response) => {
       .slice(0, 5)
       .map(
         (r: any) =>
-          `  • [${(r.level || '').toUpperCase()}] ${r.title}: ${r.reason || ''}\n` +
-          `    Suggested: ${(r.suggestedControls || []).join('; ')}`,
+          `  • [${LEVEL_AZ[(r.level||'').toLowerCase()] || (r.level||'').toUpperCase()}] ${r.title}\n` +
+          `    Səbəb: ${r.reason || ''}\n` +
+          `    Tövsiyə: ${(r.suggestedControls || []).join('; ')}`,
       )
-      .join('\n');
+      .join('\n\n');
 
     const report = [
-      `RISK ASSESSMENT REPORT`,
+      `RİSK QİYMƏTLƏNDİRMƏ HESABATI`,
       `═══════════════════════════════════════`,
-      `Title       : ${assessment.title}`,
-      `Scope       : ${assessment.scope || 'N/A'}`,
-      `Framework   : ${assessment.framework || 'N/A'}`,
-      `Status      : ${assessment.status}`,
-      `Generated   : ${generatedAt}`,
+      `Ad           : ${assessment.title}`,
+      `Əhatə dairəsi: ${assessment.scope || 'N/A'}`,
+      `Çərçivə      : ${assessment.framework || 'N/A'}`,
+      `Status       : ${assessment.status}`,
+      `Yaradılıb    : ${generatedAt}`,
       ``,
-      `OVERALL SCORE: ${score} / 100  —  Risk Level: ${riskLevel.toUpperCase()}`,
+      `ÜMUMİ RİSK GÖSTƏRICISI: ${score} / 100  —  Risk Səviyyəsi: ${LEVEL_AZ[riskLevel.toLowerCase()] || riskLevel.toUpperCase()}`,
       ``,
-      `ANSWER SUMMARY`,
+      `CAVAB XÜLASƏSİ`,
       `──────────────`,
-      `  Yes: ${yesCount}  |  No: ${noCount}  |  N/A: ${naCount}  |  Total: ${answers.length}`,
-      ``,
-      answers.length > 0
-        ? `RESPONSES (first ${Math.min(answers.length, 20)} of ${answers.length})\n──────────────\n${answerSummaryLines}`
-        : `No answers recorded.`,
+      `  Bəli: ${yesCount}  |  Qismən: ${partialCount}  |  Xeyr: ${noCount}  |  N/A: ${naCount}  |  Cəmi: ${answers.length}`,
       ``,
       inferredRisks.length > 0
-        ? `IDENTIFIED RISK GAPS\n────────────────────\n${recommendationLines}`
-        : `No risk gaps identified.`,
+        ? `AŞKARLANAN RİSK BOŞLUQLARI\n──────────────────────────\n${recommendationLines}`
+        : `Risk boşluğu aşkarlanmadı.`,
       ``,
       `─────────────────────────────────────────`,
-      `Report generated by Riskeez on ${generatedAt}`,
+      `Hesabat platforması tərəfindən ${generatedAt} tarixdə yaradılmışdır.`,
     ].join('\n');
 
     await auditLog(

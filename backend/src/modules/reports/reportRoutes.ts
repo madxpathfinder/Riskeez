@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 
 export const reportRouter = Router();
 reportRouter.use(authMiddleware);
@@ -60,7 +60,7 @@ reportRouter.get('/:id', async (req, res) => {
 });
 
 // POST /api/reports
-reportRouter.post('/', async (req, res) => {
+reportRouter.post('/', requirePermission('reports:create'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { title, assessmentId, overallScore, riskLevel, createdBy, config, content, type } = req.body;
@@ -104,7 +104,7 @@ reportRouter.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/reports/:id
-reportRouter.delete('/:id', async (req, res) => {
+reportRouter.delete('/:id', requirePermission('reports:delete'), async (req, res) => {
   try {
     const user = (req as any).user;
     const existing = await db.query(
@@ -120,7 +120,7 @@ reportRouter.delete('/:id', async (req, res) => {
 });
 
 // GET /api/reports/:id/export.csv  (risk register export scoped to report)
-reportRouter.get('/:id/export.csv', async (req, res) => {
+reportRouter.get('/:id/export.csv', requirePermission('data:export'), async (req, res) => {
   try {
     const user = (req as any).user;
     const risks = await db.query(

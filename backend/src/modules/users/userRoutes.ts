@@ -2,25 +2,43 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../db.js';
-import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 
 export const userRouter = Router();
 userRouter.use(authMiddleware);
+
+function normalizeRole(role: string): string {
+  switch (role.toLowerCase().replace(/[\s_-]/g, '')) {
+    case 'superadmin': return 'Super Admin';
+    case 'admin': return 'Admin';
+    case 'riskmanager': return 'Risk Manager';
+    case 'auditor':
+    case 'complianceofficer':
+    case 'compliance': return 'Auditor';
+    case 'contributor':
+    case 'departmentuser': return 'Contributor';
+    default: return 'Viewer';
+  }
+}
+
+function normalizeStatus(status: string): string {
+  return status.toLowerCase() === 'active' ? 'Active' : 'Disabled';
+}
 
 const toUser = (row: any) => ({
   id: row.id,
   name: row.name,
   email: row.email,
-  role: row.role,
+  role: normalizeRole(row.role),
   organizationId: row.organization_id,
-  status: row.status,
+  status: normalizeStatus(row.status),
   forcePasswordChange: row.force_password_change,
   lastLogin: row.last_login,
   createdAt: row.created_at
 });
 
 // GET /api/users
-userRouter.get('/', async (req, res) => {
+userRouter.get('/', requirePermission('users:view'), async (req, res) => {
   try {
     const user = (req as any).user;
     const result = await db.query(`SELECT * FROM users WHERE organization_id = $1 ORDER BY created_at`, [user.organizationId]);
@@ -31,7 +49,7 @@ userRouter.get('/', async (req, res) => {
 });
 
 // POST /api/users
-userRouter.post('/', permissionMiddleware(['admin']), async (req, res) => {
+userRouter.post('/', requirePermission('users:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { name, email, role, password } = req.body;
@@ -41,7 +59,7 @@ userRouter.post('/', permissionMiddleware(['admin']), async (req, res) => {
     const result = await db.query(
       `INSERT INTO users (id, organization_id, name, email, password_hash, role, status, force_password_change)
        VALUES ($1,$2,$3,$4,$5,$6,'active',$7) RETURNING *`,
-      [id, user.organizationId, name, email, hash, role || 'viewer', !password]
+      [id, user.organizationId, name, email, hash, normalizeRole(role || 'Viewer'), !password]
     );
     res.status(201).json({ user: toUser(result.rows[0]) });
   } catch (err: any) {
@@ -51,7 +69,7 @@ userRouter.post('/', permissionMiddleware(['admin']), async (req, res) => {
 });
 
 // PUT /api/users/:id
-userRouter.put('/:id', permissionMiddleware(['admin']), async (req, res) => {
+userRouter.put('/:id', requirePermission('users:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { name, email, role, status } = req.body;
@@ -67,7 +85,7 @@ userRouter.put('/:id', permissionMiddleware(['admin']), async (req, res) => {
 });
 
 // POST /api/users/:id/disable
-userRouter.post('/:id/disable', permissionMiddleware(['admin']), async (req, res) => {
+userRouter.post('/:id/disable', requirePermission('users:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     await db.query(`UPDATE users SET status='disabled' WHERE id=$1 AND organization_id=$2`, [req.params.id, user.organizationId]);
@@ -78,7 +96,7 @@ userRouter.post('/:id/disable', permissionMiddleware(['admin']), async (req, res
 });
 
 // POST /api/users/:id/enable
-userRouter.post('/:id/enable', permissionMiddleware(['admin']), async (req, res) => {
+userRouter.post('/:id/enable', requirePermission('users:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     await db.query(`UPDATE users SET status='active' WHERE id=$1 AND organization_id=$2`, [req.params.id, user.organizationId]);
@@ -89,7 +107,7 @@ userRouter.post('/:id/enable', permissionMiddleware(['admin']), async (req, res)
 });
 
 // POST /api/users/:id/reset-password
-userRouter.post('/:id/reset-password', permissionMiddleware(['admin']), async (req, res) => {
+userRouter.post('/:id/reset-password', requirePermission('users:manage'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { password, forceChange } = req.body;

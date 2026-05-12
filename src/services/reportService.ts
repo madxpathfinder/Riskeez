@@ -5,6 +5,8 @@ import { NotificationType } from '../types/notification';
 import { APP_CONFIG } from '../config/appConfig';
 import { api } from './apiClient';
 
+const getToken = () => localStorage.getItem('riskeez_jwt');
+
 export interface Report {
   id: string;
   title: string;
@@ -100,8 +102,10 @@ export const reportService = {
 
   async exportRiskRegisterCSV(reportId?: string): Promise<void> {
     if (APP_CONFIG.DATA_PROVIDER === 'api') {
-      const token = localStorage.getItem('riskeez_token');
-      const url = reportId ? `/api/reports/${reportId}/export.csv` : '/api/risks/export.csv';
+      const token = getToken();
+      const url = reportId
+        ? `${APP_CONFIG.API_URL}/api/reports/${reportId}/export.csv`
+        : `${APP_CONFIG.API_URL}/api/risks/export.csv`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();

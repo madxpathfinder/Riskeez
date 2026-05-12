@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,8 +16,8 @@ async function auditLog(action: string, entity: string, desc: string, orgId: str
   try {
     await db.query(
       `INSERT INTO audit_logs (id, organization_id, action, module, entity_type, details, severity, source)
-       VALUES ($1,$2,$3,$4,$4,$5,'Low','API')`,
-      [`al-${Date.now()}`, orgId, action, entity, desc]
+       VALUES ($1,$2,$3,$4,$5,$6,'Low','API')`,
+      [`al-${Date.now()}`, orgId, action, entity, entity, desc]
     );
   } catch {}
 }
@@ -66,7 +66,7 @@ documentRouter.get('/', async (req, res) => {
 });
 
 // POST /api/documents
-documentRouter.post('/', async (req, res) => {
+documentRouter.post('/', requirePermission('documents:create'), async (req, res) => {
   try {
     const user = (req as any).user;
     const {
@@ -132,7 +132,7 @@ documentRouter.post('/', async (req, res) => {
 });
 
 // PUT /api/documents/:id
-documentRouter.put('/:id', async (req, res) => {
+documentRouter.put('/:id', requirePermission('documents:update'), async (req, res) => {
   try {
     const user = (req as any).user;
     const {
@@ -219,8 +219,49 @@ documentRouter.get('/:id/download', async (req, res) => {
   }
 });
 
+// GET /api/documents/:id/view
+documentRouter.get('/:id/view', async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const result = await db.query(
+      `SELECT id, name, type, file_name, mime_type, content, file_path, file_size, uploaded_at FROM documents WHERE id=$1 AND organization_id=$2`,
+      [req.params.id, user.organizationId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Document not found' });
+    const row = result.rows[0];
+
+    const isText = row.mime_type === 'text/plain' || (row.file_name || '').endsWith('.txt');
+    const isDocx = row.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (row.file_name || '').endsWith('.docx');
+
+    if (row.content) {
+      return res.json({ viewable: true, content: row.content, fileName: row.file_name, mimeType: row.mime_type });
+    }
+
+    if (row.file_path && fs.existsSync(row.file_path)) {
+      if (isText) {
+        const text = fs.readFileSync(row.file_path, 'utf-8').slice(0, 50000);
+        return res.json({ viewable: true, content: text, fileName: row.file_name, mimeType: row.mime_type });
+      }
+      if (isDocx) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const mammoth = require('mammoth');
+          const docxResult = await mammoth.extractRawText({ path: row.file_path });
+          return res.json({ viewable: true, content: docxResult.value.slice(0, 50000), fileName: row.file_name, mimeType: row.mime_type });
+        } catch {
+          // fall through to not-viewable
+        }
+      }
+    }
+
+    res.json({ viewable: false, fileName: row.file_name, mimeType: row.mime_type, fileSize: row.file_size });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/documents/:id
-documentRouter.delete('/:id', async (req, res) => {
+documentRouter.delete('/:id', requirePermission('documents:delete'), async (req, res) => {
   try {
     const user = (req as any).user;
     const existing = await db.query(

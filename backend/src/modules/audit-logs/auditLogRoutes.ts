@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,21 +27,21 @@ const toLog = (row: any) => ({
   userName: row.user_name,
   userRole: row.user_role,
   action: row.action,
-  module: row.module || row.entity_type,
-  entityType: row.entity_type || row.module,
-  entityName: row.entity_name,
-  details: row.details || row.description,
-  severity: row.severity,
-  source: row.source,
-  entityId: row.entity_id,
-  metadata: row.metadata,
-  timestamp: row.timestamp || row.created_at,
-  ipAddress: row.ip_address,
-  userAgent: row.user_agent
+  module: row.module || row.entity_type || '',
+  entityType: row.entity_type || row.module || '',
+  entityName: row.entity_name || '',
+  details: row.details || '',
+  severity: row.severity || 'Low',
+  source: row.source || 'UI',
+  entityId: row.entity_id || '',
+  metadata: row.metadata || null,
+  timestamp: row.timestamp,
+  ipAddress: row.ip_address || '',
+  userAgent: row.user_agent || ''
 });
 
 // GET /api/audit-logs
-auditLogRouter.get('/', async (req, res) => {
+auditLogRouter.get('/', requirePermission('audit_logs:view'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { action, module, severity, startDate, endDate, search, limit = '500' } = req.query;
@@ -63,15 +63,15 @@ auditLogRouter.get('/', async (req, res) => {
       params.push(severity);
     }
     if (startDate) {
-      conditions.push(`(timestamp >= $${p} OR created_at >= $${p})`);
-      params.push(startDate); p++;
+      conditions.push(`timestamp >= $${p++}`);
+      params.push(startDate);
     }
     if (endDate) {
-      conditions.push(`(timestamp <= $${p} OR created_at <= $${p})`);
-      params.push(endDate); p++;
+      conditions.push(`timestamp <= $${p++}`);
+      params.push(endDate);
     }
     if (search) {
-      conditions.push(`(action ILIKE $${p} OR user_name ILIKE $${p} OR details ILIKE $${p} OR description ILIKE $${p})`);
+      conditions.push(`(action ILIKE $${p} OR user_name ILIKE $${p} OR details ILIKE $${p})`);
       params.push(`%${search}%`); p++;
     }
 
@@ -79,7 +79,7 @@ auditLogRouter.get('/', async (req, res) => {
     const parsedLimit = Math.min(parseInt(limit as string) || 500, 2000);
 
     const result = await db.query(
-      `SELECT * FROM audit_logs ${where} ORDER BY COALESCE(timestamp, created_at) DESC LIMIT $${p}`,
+      `SELECT * FROM audit_logs ${where} ORDER BY timestamp DESC LIMIT $${p}`,
       [...params, parsedLimit]
     );
     res.json({ logs: result.rows.map(toLog) });
@@ -89,7 +89,7 @@ auditLogRouter.get('/', async (req, res) => {
 });
 
 // GET /api/audit-logs/export.csv
-auditLogRouter.get('/export.csv', async (req, res) => {
+auditLogRouter.get('/export.csv', requirePermission('audit_logs:view'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { startDate, endDate, module, severity } = req.query;
@@ -100,23 +100,23 @@ auditLogRouter.get('/export.csv', async (req, res) => {
 
     if (module && module !== 'All') { conditions.push(`(module = $${p} OR entity_type = $${p})`); params.push(module); p++; }
     if (severity && severity !== 'All') { conditions.push(`severity = $${p++}`); params.push(severity); }
-    if (startDate) { conditions.push(`COALESCE(timestamp, created_at) >= $${p++}`); params.push(startDate); }
-    if (endDate) { conditions.push(`COALESCE(timestamp, created_at) <= $${p++}`); params.push(endDate); }
+    if (startDate) { conditions.push(`timestamp >= $${p++}`); params.push(startDate); }
+    if (endDate) { conditions.push(`timestamp <= $${p++}`); params.push(endDate); }
 
     const where = 'WHERE ' + conditions.join(' AND ');
     const result = await db.query(
-      `SELECT * FROM audit_logs ${where} ORDER BY COALESCE(timestamp, created_at) DESC LIMIT 5000`,
+      `SELECT * FROM audit_logs ${where} ORDER BY timestamp DESC LIMIT 5000`,
       params
     );
 
     const headers = ['Timestamp', 'Actor', 'Role', 'Action', 'Module', 'Details', 'Severity', 'Source', 'Entity ID'];
     const rows = result.rows.map((r: any) => [
-      r.timestamp || r.created_at || '',
+      r.timestamp || '',
       r.user_name || '',
       r.user_role || '',
       r.action || '',
       r.module || r.entity_type || '',
-      (r.details || r.description || '').replace(/"/g, '""'),
+      (r.details || '').replace(/"/g, '""'),
       r.severity || '',
       r.source || '',
       r.entity_id || ''
@@ -137,7 +137,7 @@ auditLogRouter.post('/', async (req, res) => {
     const user = (req as any).user;
     const { action, module, details, severity, source, entityId, entityType, entityName, metadata } = req.body;
     const id = uuidv4();
-    const ip = req.ip || req.socket?.remoteAddress || null;
+    const ip = req.ip || (req.socket as any)?.remoteAddress || null;
     const ua = req.headers['user-agent'] || null;
     const orgId = user?.organizationId || null;
 
@@ -147,8 +147,8 @@ auditLogRouter.post('/', async (req, res) => {
           details, severity, source, entity_id, metadata, ip_address, user_agent)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [id, orgId, user?.id || 'system', user?.name || 'System', user?.role,
-       action, module || entityType, entityType || module, entityName || null,
-       details, severity || 'Low', source || 'UI',
+       action, module || entityType || null, entityType || module || null, entityName || null,
+       details || null, severity || 'Low', source || 'UI',
        entityId || null, metadata ? JSON.stringify(metadata) : null,
        ip, ua]
     );

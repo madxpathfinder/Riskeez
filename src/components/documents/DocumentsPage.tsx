@@ -15,6 +15,9 @@ import { useToast } from '../../contexts/ToastContext';
 import { auditLogService } from '../../services/auditLogService';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { APP_CONFIG } from '../../config/appConfig';
+import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
+import { Permission } from '../../services/permissionService';
 
 interface DocumentsPageProps {
   store: any;
@@ -23,8 +26,13 @@ interface DocumentsPageProps {
 
 export const DocumentsPage = ({ store, onNavigate }: DocumentsPageProps) => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
+  const { appName } = useBranding();
   const { documents, addDocument, updateDocument, deleteDocument, isLoading, risks = [], controls = [], assessments = [] } = store;
   const { success, error: toastError } = useToast();
+  const canCreate = hasPermission(Permission.DOCUMENTS_CREATE);
+  const canUpdate = hasPermission(Permission.DOCUMENTS_UPDATE);
+  const canDelete = hasPermission(Permission.DOCUMENTS_DELETE);
   const [search, setSearch]               = useState('');
   const [filterType, setFilterType]       = useState('All');
   const [filterStatus, setFilterStatus]   = useState('All');
@@ -62,8 +70,8 @@ export const DocumentsPage = ({ store, onNavigate }: DocumentsPageProps) => {
     if (!doc.fileName) { toastError('No File', 'This document has no attached file.'); return; }
     if (APP_CONFIG.DATA_PROVIDER === 'api') {
       try {
-        const token = localStorage.getItem('riskeez_token');
-        const res = await fetch(`/api/documents/${doc.id}/download`, {
+        const token = localStorage.getItem('riskeez_jwt');
+        const res = await fetch(`${APP_CONFIG.API_URL}/api/documents/${doc.id}/download`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Download failed');
@@ -157,7 +165,7 @@ export const DocumentsPage = ({ store, onNavigate }: DocumentsPageProps) => {
         />
         <div className="flex items-center gap-3">
           <Button variant="secondary" icon={Download} onClick={handleExportVault} className="h-11 font-black">{t('common.export')}</Button>
-          <Button onClick={() => { setEditDoc(null); setIsUploadOpen(true); }} icon={Plus} className="h-11 px-6 font-black shadow-saas">{t('documents.addDocument')}</Button>
+          {canCreate && <Button onClick={() => { setEditDoc(null); setIsUploadOpen(true); }} icon={Plus} className="h-11 px-6 font-black shadow-saas">{t('documents.addDocument')}</Button>}
         </div>
       </div>
 
@@ -199,7 +207,7 @@ export const DocumentsPage = ({ store, onNavigate }: DocumentsPageProps) => {
                 <Badge color="blue" className="bg-blue-500/20 text-blue-400 border-blue-500/20 py-0">AES-256</Badge>
              </p>
              <p className="text-[10px] font-bold text-slate-400 leading-relaxed max-w-3xl">
-                All artifacts are cryptographically isolated per organization. AI-driven analysis is executed in secure memory buffers. Riskeez enforces a Zero-Trust architecture where document content is never exposed to model training sets.
+                All artifacts are cryptographically isolated per organization. AI-driven analysis is executed in secure memory buffers. {appName} enforces a Zero-Trust architecture where document content is never exposed to model training sets.
              </p>
           </div>
           <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full -mr-16 -mt-16 blur-3xl" />
@@ -283,8 +291,8 @@ export const DocumentsPage = ({ store, onNavigate }: DocumentsPageProps) => {
                                   <Button variant="ghost" size="sm" icon={FileDown} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-accent hover:bg-accent/10" onClick={e => { e.stopPropagation(); handleDownloadFile(doc); }} title="Download File" />
                                 )}
                                 <Button variant="ghost" size="sm" icon={BrainCircuit} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-accent hover:bg-accent hover:text-white" onClick={e => { e.stopPropagation(); handleAnalyze(doc); }} loading={isAnalyzingId === doc.id} title="AI Extraction" />
-                                <Button variant="ghost" size="sm" icon={MoreVertical} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-slate-400" onClick={e => { e.stopPropagation(); setEditDoc(doc); setIsUploadOpen(true); }} title="Edit" />
-                                <Button variant="ghost" size="sm" icon={Trash2} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-rose-400 hover:bg-rose-50" onClick={e => { e.stopPropagation(); setDeleteConfirmId(doc.id); }} title="Delete" />
+                                {canUpdate && <Button variant="ghost" size="sm" icon={MoreVertical} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-slate-400" onClick={e => { e.stopPropagation(); setEditDoc(doc); setIsUploadOpen(true); }} title="Edit" />}
+                                {canDelete && <Button variant="ghost" size="sm" icon={Trash2} className="w-8 h-8 p-0 rounded-xl bg-white border border-slate-100 text-rose-400 hover:bg-rose-50" onClick={e => { e.stopPropagation(); setDeleteConfirmId(doc.id); }} title="Delete" />}
                              </div>
                           </td>
                        </tr>

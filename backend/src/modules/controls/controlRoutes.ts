@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../../db.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -41,8 +41,8 @@ async function auditLog(action: string, entity: string, desc: string, orgId: str
   try {
     await db.query(
       `INSERT INTO audit_logs (id, organization_id, action, module, entity_type, details, severity, source)
-       VALUES ($1,$2,$3,$4,$4,$5,'Low','API')`,
-      [`al-${Date.now()}`, orgId, action, entity, desc]
+       VALUES ($1,$2,$3,$4,$5,$6,'Low','API')`,
+      [`al-${Date.now()}`, orgId, action, entity, entity, desc]
     );
   } catch {}
 }
@@ -62,7 +62,7 @@ controlRouter.get('/', async (req, res) => {
 });
 
 // POST /api/controls
-controlRouter.post('/', async (req, res) => {
+controlRouter.post('/', requirePermission('controls:create'), async (req, res) => {
   try {
     const user = (req as any).user;
     const {
@@ -104,7 +104,7 @@ controlRouter.post('/', async (req, res) => {
 });
 
 // PUT /api/controls/:id
-controlRouter.put('/:id', async (req, res) => {
+controlRouter.put('/:id', requirePermission('controls:update'), async (req, res) => {
   try {
     const user = (req as any).user;
     const {
@@ -178,7 +178,7 @@ controlRouter.get('/:id/download', async (req, res) => {
 });
 
 // DELETE /api/controls/:id
-controlRouter.delete('/:id', async (req, res) => {
+controlRouter.delete('/:id', requirePermission('controls:delete'), async (req, res) => {
   try {
     const user = (req as any).user;
     const existing = await db.query(

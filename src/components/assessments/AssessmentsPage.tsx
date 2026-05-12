@@ -17,6 +17,8 @@ import { AssessmentStatus, RiskLevel } from '../../types';
 import { AssessmentWizard } from './AssessmentWizard';
 import { AssessmentDetail } from './AssessmentDetail';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Permission } from '../../services/permissionService';
 
 interface AssessmentsPageProps {
   store: any;
@@ -25,7 +27,9 @@ interface AssessmentsPageProps {
 
 export const AssessmentsPage = ({ store, onNavigate }: AssessmentsPageProps) => {
   const { t } = useLanguage();
+  const { hasPermission } = useAuth();
   const { assessments, isLoading } = store;
+  const canCreate = hasPermission(Permission.ASSESSMENTS_CREATE);
   const [isFlowOpen, setIsFlowOpen] = useState(false);
   const [continuationAssessment, setContinuationAssessment] = useState<any>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
@@ -55,7 +59,7 @@ export const AssessmentsPage = ({ store, onNavigate }: AssessmentsPageProps) => 
           title={t('assessments.title')} 
           subtitle="Manage and track organization-wide risk assessments" 
         />
-        <Button onClick={() => setIsFlowOpen(true)} icon={Plus}>{t('assessments.startAssessment')}</Button>
+        {canCreate && <Button onClick={() => setIsFlowOpen(true)} icon={Plus}>{t('assessments.startAssessment')}</Button>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

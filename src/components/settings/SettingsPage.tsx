@@ -24,6 +24,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
 import { APP_CONFIG } from '../../config/appConfig';
 import { api } from '../../services/apiClient';
+import { useBranding } from '../../contexts/BrandingContext';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 interface RiskCategory {
@@ -608,7 +609,9 @@ const AISettings = () => {
 };
 
 // ─── security settings ────────────────────────────────────────────────────────
-const SecuritySettings = () => (
+const SecuritySettings = () => {
+  const { appName } = useBranding();
+  return (
   <Card title="Security & Data Protocol" subtitle="Enterprise-grade configuration for cryptographic isolation and institutional integrity">
     <div className="space-y-8">
       <div className="flex items-start gap-6 p-8 bg-slate-900 border border-slate-800 rounded-[2.5rem] text-white shadow-glow-slate relative overflow-hidden">
@@ -636,7 +639,7 @@ const SecuritySettings = () => (
           <div>
             <h5 className="text-sm font-black text-amber-900 uppercase tracking-tight mb-1">Institutional Disclaimer</h5>
             <p className="text-[11px] font-bold text-amber-700 leading-relaxed">
-              The Riskeez Strategic AI Advisor provides advisory synthesized reasoning only. It does NOT replace legal, regulatory, audit, or professional risk advice.
+              The {appName} Strategic AI Advisor provides advisory synthesized reasoning only. It does NOT replace legal, regulatory, audit, or professional risk advice.
             </p>
           </div>
         </div>
@@ -660,7 +663,8 @@ const SecuritySettings = () => (
       </div>
     </div>
   </Card>
-);
+  );
+};
 
 // ─── audit log preview ────────────────────────────────────────────────────────
 const AuditLogSettings = ({ onNavigate }: any) => {

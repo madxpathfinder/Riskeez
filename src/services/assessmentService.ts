@@ -128,10 +128,21 @@ export const assessmentService = {
     return { report: 'Report not available in offline mode.', generatedAt: new Date().toISOString() };
   },
 
-  async getQuestions(): Promise<any[]> {
+  async getCategories(): Promise<any[]> {
     if (APP_CONFIG.DATA_PROVIDER === 'api') {
       try {
-        const res = await api.get<{ questions: any[] }>('/api/assessments/questions');
+        const res = await api.get<{ categories: any[] }>('/api/assessments/categories');
+        if (res.categories && res.categories.length > 0) return res.categories;
+      } catch {}
+    }
+    return [];
+  },
+
+  async getQuestions(categoryKeys?: string[]): Promise<any[]> {
+    if (APP_CONFIG.DATA_PROVIDER === 'api') {
+      try {
+        const qs = categoryKeys && categoryKeys.length > 0 ? `?categories=${categoryKeys.join(',')}` : '';
+        const res = await api.get<{ questions: any[] }>(`/api/assessments/questions${qs}`);
         if (res.questions && res.questions.length > 0) return res.questions;
       } catch {}
     }

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Download, ShieldAlert, AlertTriangle, MoreVertical,
   ShieldCheck, FilterX, Trash2, FileDown, FileUp, PlusCircle, Brain,
@@ -20,6 +21,9 @@ import { notificationService } from '../../services/notificationService';
 import { NotificationType } from '../../types/notification';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useBreadcrumb } from '../../contexts/BreadcrumbContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
+import { Permission } from '../../services/permissionService';
 
 // ── Storage helpers ─────────────────────────────────────────────────────────
 const load = <T,>(key: string): T[] => {
@@ -286,8 +290,12 @@ const EditableTable = ({ columns, data, onSave }: EditableTableProps) => {
 export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) => {
   const { t } = useLanguage();
   const { setSubLabel } = useBreadcrumb();
+  const { hasPermission } = useAuth();
+  const { appName } = useBranding();
   const { risks, updateRisk, addRisk, deleteRisk, controls, isLoading: loading } = store;
   const { success, error, info } = useToast();
+  const canCreateRisk = hasPermission(Permission.RISKS_CREATE);
+  const canDeleteRisk = hasPermission(Permission.RISKS_DELETE);
 
   const [activeSheet, setActiveSheet] = useState<string>('risks');
 
@@ -302,13 +310,21 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
     return d;
   });
 
-  // Risk-specific state
+  // Risk-specific state — initialised from URL query params (set by Dashboard navigation)
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [selectedRisk, setSelectedRisk] = useState<any>(null);
   const [filterCategory, setFilterCategory] = useState('All');
-  const [filterLevel, setFilterLevel] = useState('All');
-  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterLevel, setFilterLevel] = useState(() => searchParams.get('severity') || 'All');
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('status') || 'All');
   const [filterOwner, setFilterOwner] = useState('All');
+  const [filterDepartment, setFilterDepartment] = useState(() => searchParams.get('department') || 'All');
+  const [filterLikelihood, setFilterLikelihood] = useState<number | null>(() => {
+    const v = searchParams.get('likelihood'); return v ? parseInt(v, 10) : null;
+  });
+  const [filterImpact, setFilterImpact] = useState<number | null>(() => {
+    const v = searchParams.get('impact'); return v ? parseInt(v, 10) : null;
+  });
   const [filterControls, setFilterControls] = useState('All');
   const [selectedRisks, setSelectedRisks] = useState<string[]>([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -318,6 +334,21 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
   const [riskToDelete, setRiskToDelete] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-apply URL params when they change (e.g. user navigates back from Dashboard)
+  useEffect(() => {
+    const sev = searchParams.get('severity');
+    const sts = searchParams.get('status');
+    const dep = searchParams.get('department');
+    const lk  = searchParams.get('likelihood');
+    const im  = searchParams.get('impact');
+    if (sev) setFilterLevel(sev);
+    if (sts) setFilterStatus(sts);
+    if (dep) setFilterDepartment(dep);
+    if (lk)  setFilterLikelihood(parseInt(lk, 10));
+    if (im)  setFilterImpact(parseInt(im, 10));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()]);
 
   const saveSheet = (id: string, data: any[]) => {
     const sheet = SHEETS.find(s => s.id === id);
@@ -334,12 +365,16 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
     const ml = filterLevel === 'All' || r.level === filterLevel;
     const mst = filterStatus === 'All' || r.status === filterStatus;
     const mo = filterOwner === 'All' || r.owner === filterOwner;
+    const md = filterDepartment === 'All' || (r.department || '') === filterDepartment;
+    const mli = filterLikelihood === null || r.likelihood === filterLikelihood;
+    const mim = filterImpact === null || r.impact === filterImpact;
     const rc = controls.filter((c: any) => c.riskId === r.id);
     const mct = filterControls === 'All' ||
       (filterControls === 'Has Controls' ? rc.length > 0 : rc.length === 0);
-    return ms && mc && ml && mst && mo && mct;
+    return ms && mc && ml && mst && mo && md && mli && mim && mct;
   });
   const owners = Array.from(new Set(risks.map((r: any) => r.owner))) as string[];
+  const departments = Array.from(new Set(risks.map((r: any) => r.department).filter(Boolean))) as string[];
   const totals = {
     total: risks.length,
     critical: risks.filter((r: any) => r.level === RiskLevel.CRITICAL).length,
@@ -374,7 +409,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
   const handleExport = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Riskeez';
+      workbook.creator = appName;
       workbook.created = new Date();
 
       const addSheet = (name: string, columns: string[], rows: any[]) => {
@@ -702,7 +737,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
   const handleDownloadTemplate = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'Riskeez';
+      workbook.creator = appName;
 
       const addSampleSheet = (name: string, columns: string[], sampleRow: Record<string, string>) => {
         const ws = workbook.addWorksheet(name);
@@ -841,7 +876,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
           <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} />
           <Button variant="secondary" icon={FileUp} className="h-11" onClick={() => fileInputRef.current?.click()}>Import</Button>
           <Button variant="secondary" onClick={handleExport} icon={Download} className="h-11">Export Excel</Button>
-          <Button icon={PlusCircle} onClick={() => setShowAddModal(true)} className="h-11 px-6 bg-accent border-none text-white font-black shadow-glow-accent">Risk Əlavə Et</Button>
+          {canCreateRisk && <Button icon={PlusCircle} onClick={() => setShowAddModal(true)} className="h-11 px-6 bg-accent border-none text-white font-black shadow-glow-accent">Risk Əlavə Et</Button>}
         </div>
       </div>
 
@@ -937,6 +972,12 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
                   <option value="All">Bütün Sahiblər</option>
                   {owners.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
+                {departments.length > 0 && (
+                  <select className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest outline-none" value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)}>
+                    <option value="All">{t('riskRegister.allDepartments')}</option>
+                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                )}
               </div>
             </div>
             {selectedRisks.length > 0 && (
@@ -956,7 +997,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
                     <th className="pl-8 pr-2 py-5 w-10">
                       <input type="checkbox" onChange={toggleSelectAll} checked={selectedRisks.length === filteredRisks.length && filteredRisks.length > 0} className="w-5 h-5 rounded-lg accent-accent" />
                     </th>
-                    {['Risk Adı / Kateqoriya','Sahibi','Bal','Səviyyə','Nəzarətlər','Status','Hədəf Tarix',''].map(h => (
+                    {['Risk Adı / Kateqoriya','Şöbə','Sahibi','Bal','Səviyyə','Nəzarətlər','Status','Hədəf Tarix',''].map(h => (
                       <th key={h} className="px-4 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
@@ -972,6 +1013,13 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
                         <td className="px-4 py-6" onClick={() => setSelectedRisk(r)}>
                           <p className="font-black text-slate-900 text-sm group-hover:text-accent transition-colors">{r.title}</p>
                           <span className="text-[9px] font-black text-slate-400 bg-slate-100/50 px-2 py-0.5 rounded border border-slate-100 mt-1.5 inline-block">{r.category}</span>
+                        </td>
+                        <td className="px-4 py-6" onClick={() => setSelectedRisk(r)}>
+                          {r.department ? (
+                            <span className="text-xs font-bold text-slate-600">{r.department}</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-300">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-6" onClick={() => setSelectedRisk(r)}>
                           <div className="flex items-center gap-2">
@@ -995,7 +1043,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
                         <td className="pl-4 pr-8 py-6 text-right">
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                             <Button variant="ghost" size="sm" icon={ShieldCheck} className="w-9 h-9 p-0 rounded-xl text-emerald-600 hover:bg-emerald-50" onClick={e => { e.stopPropagation(); handleMitigate(r); }} />
-                            <Button variant="ghost" size="sm" icon={Trash2} className="w-9 h-9 p-0 rounded-xl text-rose-500 hover:bg-rose-50" onClick={e => { e.stopPropagation(); setRiskToDelete(r.id); }} />
+                            {canDeleteRisk && <Button variant="ghost" size="sm" icon={Trash2} className="w-9 h-9 p-0 rounded-xl text-rose-500 hover:bg-rose-50" onClick={e => { e.stopPropagation(); setRiskToDelete(r.id); }} />}
                             <Button variant="ghost" size="sm" icon={MoreVertical} className="w-9 h-9 p-0 rounded-xl text-slate-400 hover:bg-slate-50" onClick={e => { e.stopPropagation(); setSelectedRisk(r); }} />
                           </div>
                         </td>
@@ -1021,7 +1069,7 @@ export const RiskRegisterPage = ({ store, onNavigate }: RiskRegisterPageProps) =
 
         const exportSheet = async () => {
           const wb = new ExcelJS.Workbook();
-          wb.creator = 'Riskeez';
+          wb.creator = appName;
           wb.created = new Date();
           const ws = wb.addWorksheet(sheet.sheetName);
           ws.columns = cols.map(c => ({ header: c, key: c, width: Math.max(c.length + 4, 20) }));

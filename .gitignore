@@ -30,7 +30,6 @@ backups/
 backend/backups/
 
 # Database dumps / backups
-*.sql
 *.dump
 *.backup
 
@@ -43,3 +42,9 @@ backend/backups/
 tmp/
 temp/
 .cache/
+
+# Claude Code local settings (contains sensitive data)
+.claude/
+
+# Broken ESM-conflicting pm2 config (use ecosystem.config.cjs instead)
+ecosystem.config.js

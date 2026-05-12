@@ -19,6 +19,7 @@ export interface Risk {
   assessmentId?: string;
   title: string;
   category: string;
+  department?: string;
   description: string;
   likelihood: number; // 1-5
   impact: number;    // 1-5

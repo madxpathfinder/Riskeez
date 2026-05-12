@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Sparkles, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Button, Card } from '../common';
 import { AIFrontService, AIResponse } from '../../services/aiFrontService';
+import { useBranding } from '../../contexts/BrandingContext';
 
 interface RemediationPlanTabProps {
   risk: any;
@@ -12,6 +13,7 @@ interface RemediationPlanTabProps {
 export const RemediationPlanTab = ({ risk, store }: RemediationPlanTabProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [plans, setPlans] = useState<AIResponse | null>(null);
+  const { appName } = useBranding();
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -47,7 +49,7 @@ export const RemediationPlanTab = ({ risk, store }: RemediationPlanTabProps) => 
         <div className="p-16 text-center bg-white border border-dashed border-slate-200 rounded-[32px]">
            <Sparkles size={32} className="mx-auto mb-4 text-slate-200" />
            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No active remediation strategy</p>
-           <p className="text-[10px] text-slate-500 mt-2 max-w-xs mx-auto font-bold">Use Riskeez AI to generate a calibrated mitigation roadmap based on likelihood and impact.</p>
+           <p className="text-[10px] text-slate-500 mt-2 max-w-xs mx-auto font-bold">Use {appName} AI to generate a calibrated mitigation roadmap based on likelihood and impact.</p>
         </div>
       )}
 

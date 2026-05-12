@@ -4,17 +4,25 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-brand: #1A102D;
-  --color-brand-light: #2D2144;
-  --color-accent: #8B5CF6;
+
+  /* ── Brand & Accent: Burgundy / Dark Red ── */
+  --color-brand: #1C0810;
+  --color-brand-light: #2E1020;
+  --color-brand-mid: #4A1B30;
+  --color-accent: #8B2335;
+  --color-accent-light: #A8293F;
+  --color-accent-muted: #C4566A;
+
+  /* ── Semantic ── */
   --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
-  
+
+  /* ── Shadows ── */
   --shadow-saas: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-saas-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-saas-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-glow-accent: 0 0 0 1px rgb(139 35 53 / 0.25), 0 4px 16px -2px rgb(139 35 53 / 0.40);
 }
 
 @layer base {

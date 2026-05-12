@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, FileText, ShieldAlert, CheckCircle2, ChevronRight, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useBranding } from '../../contexts/BrandingContext';
 
 export const GlobalSearch = ({ store, onNavigate }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { assessments, risks, controls, documents } = store;
+  const { appName } = useBranding();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -76,7 +78,7 @@ export const GlobalSearch = ({ store, onNavigate }: any) => {
                      autoFocus
                      type="text" 
                      className="flex-grow bg-transparent border-none outline-none text-lg font-black text-slate-800 placeholder:text-slate-300"
-                     placeholder="Global search across Riskeez..."
+                     placeholder={`Global search across ${appName}...`}
                      value={query}
                      onChange={e => setQuery(e.target.value)}
                    />

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../db.js';
-import { authMiddleware, auditMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware, auditMiddleware, requirePermission } from '../../middleware/authMiddleware.js';
 
 export const riskRouter = Router();
 riskRouter.use(authMiddleware);
@@ -19,6 +19,7 @@ const toRisk = (row: any) => ({
   title: row.title,
   description: row.description,
   category: row.category,
+  department: row.department,
   owner: row.owner,
   status: row.status,
   likelihood: row.likelihood,
@@ -48,18 +49,18 @@ riskRouter.get('/', async (req, res) => {
 });
 
 // POST /api/risks
-riskRouter.post('/', auditMiddleware('risk_created'), async (req, res) => {
+riskRouter.post('/', requirePermission('risks:create'), auditMiddleware('risk_created'), async (req, res) => {
   try {
     const user = (req as any).user;
-    const { title, description, category, owner, status, likelihood, impact, dueDate, recommendation, existingControls, notes } = req.body;
+    const { title, description, category, department, owner, status, likelihood, impact, dueDate, recommendation, existingControls, notes } = req.body;
     const score = calcScore(Number(likelihood) || 3, Number(impact) || 3);
     const level = calcLevel(score);
     const id = `r-${Date.now()}`;
 
     const result = await db.query(
-      `INSERT INTO risks (id, organization_id, title, description, category, owner, status, likelihood, impact, score, level, due_date, recommendation, existing_controls, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-      [id, user.organizationId, title, description, category, owner, status || 'Open', likelihood || 3, impact || 3, score, level, dueDate, recommendation, existingControls, notes]
+      `INSERT INTO risks (id, organization_id, title, description, category, department, owner, status, likelihood, impact, score, level, due_date, recommendation, existing_controls, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      [id, user.organizationId, title, description, category, department || null, owner, status || 'Open', likelihood || 3, impact || 3, score, level, dueDate, recommendation, existingControls, notes]
     );
     res.status(201).json({ risk: toRisk(result.rows[0]) });
   } catch (err: any) {
@@ -67,54 +68,8 @@ riskRouter.post('/', auditMiddleware('risk_created'), async (req, res) => {
   }
 });
 
-// GET /api/risks/:id
-riskRouter.get('/:id', async (req, res) => {
-  try {
-    const user = (req as any).user;
-    const result = await db.query(
-      `SELECT * FROM risks WHERE id = $1 AND organization_id = $2`,
-      [req.params.id, user.organizationId]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json({ risk: toRisk(result.rows[0]) });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT /api/risks/:id
-riskRouter.put('/:id', auditMiddleware('risk_updated'), async (req, res) => {
-  try {
-    const user = (req as any).user;
-    const { title, description, category, owner, status, likelihood, impact, dueDate, recommendation, existingControls, notes } = req.body;
-    const score = calcScore(Number(likelihood) || 3, Number(impact) || 3);
-    const level = calcLevel(score);
-
-    const result = await db.query(
-      `UPDATE risks SET title=$1,description=$2,category=$3,owner=$4,status=$5,likelihood=$6,impact=$7,score=$8,level=$9,due_date=$10,recommendation=$11,existing_controls=$12,notes=$13,updated_at=NOW()
-       WHERE id=$14 AND organization_id=$15 RETURNING *`,
-      [title, description, category, owner, status, likelihood, impact, score, level, dueDate, recommendation, existingControls, notes, req.params.id, user.organizationId]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json({ risk: toRisk(result.rows[0]) });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/risks/:id
-riskRouter.delete('/:id', auditMiddleware('risk_deleted'), async (req, res) => {
-  try {
-    const user = (req as any).user;
-    await db.query(`DELETE FROM risks WHERE id = $1 AND organization_id = $2`, [req.params.id, user.organizationId]);
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/risks/export.csv
-riskRouter.get('/export.csv', async (req, res) => {
+// GET /api/risks/export.csv  — must be before /:id to avoid param collision
+riskRouter.get('/export.csv', requirePermission('data:export'), async (req, res) => {
   try {
     const user = (req as any).user;
     const result = await db.query(
@@ -143,8 +98,54 @@ riskRouter.get('/export.csv', async (req, res) => {
   }
 });
 
+// GET /api/risks/:id
+riskRouter.get('/:id', async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const result = await db.query(
+      `SELECT * FROM risks WHERE id = $1 AND organization_id = $2`,
+      [req.params.id, user.organizationId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ risk: toRisk(result.rows[0]) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/risks/:id
+riskRouter.put('/:id', requirePermission('risks:update'), auditMiddleware('risk_updated'), async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const { title, description, category, department, owner, status, likelihood, impact, dueDate, recommendation, existingControls, notes } = req.body;
+    const score = calcScore(Number(likelihood) || 3, Number(impact) || 3);
+    const level = calcLevel(score);
+
+    const result = await db.query(
+      `UPDATE risks SET title=$1,description=$2,category=$3,department=$4,owner=$5,status=$6,likelihood=$7,impact=$8,score=$9,level=$10,due_date=$11,recommendation=$12,existing_controls=$13,notes=$14,updated_at=NOW()
+       WHERE id=$15 AND organization_id=$16 RETURNING *`,
+      [title, description, category, department || null, owner, status, likelihood, impact, score, level, dueDate, recommendation, existingControls, notes, req.params.id, user.organizationId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ risk: toRisk(result.rows[0]) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/risks/:id
+riskRouter.delete('/:id', requirePermission('risks:delete'), auditMiddleware('risk_deleted'), async (req, res) => {
+  try {
+    const user = (req as any).user;
+    await db.query(`DELETE FROM risks WHERE id = $1 AND organization_id = $2`, [req.params.id, user.organizationId]);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/risks/import
-riskRouter.post('/import', auditMiddleware('risk_register_imported'), async (req, res) => {
+riskRouter.post('/import', requirePermission('risks:create'), auditMiddleware('risk_register_imported'), async (req, res) => {
   try {
     const user = (req as any).user;
     const { rows } = req.body;

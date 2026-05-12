@@ -2,6 +2,14 @@ import { APP_CONFIG } from '../config/appConfig';
 
 const getToken = () => localStorage.getItem('riskeez_jwt');
 
+function clearSessionAndRedirect() {
+  localStorage.removeItem('riskeez_jwt');
+  localStorage.removeItem('riskeez_current_user');
+  localStorage.removeItem('riskeez_session');
+  // Hard redirect so React state is fully reset
+  window.location.href = '/login';
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -11,6 +19,15 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${APP_CONFIG.API_URL}${path}`, { ...options, headers });
+
+  if (res.status === 401) {
+    // Only force logout if we actually sent a token (i.e. user appeared logged in).
+    // Unauthenticated pre-login calls (no token) should just throw — no redirect.
+    if (token) {
+      clearSessionAndRedirect();
+    }
+    throw new Error('Sessiya müddəti bitib. Zəhmət olmasa yenidən daxil olun.');
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));

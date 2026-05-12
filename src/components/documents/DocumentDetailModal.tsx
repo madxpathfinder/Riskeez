@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns';
 import { Badge, Button } from '../common';
 import { Document as AppDocument } from '../../types';
+import { useBranding } from '../../contexts/BrandingContext';
 
 interface DocumentDetailModalProps {
   doc: any; // Using any for flexibility with extended fields
@@ -16,6 +17,7 @@ interface DocumentDetailModalProps {
 
 export const DocumentDetailModal = ({ doc, onClose }: DocumentDetailModalProps) => {
   const [activeTab, setActiveTab] = useState<'analysis' | 'text' | 'history'>('analysis');
+  const { appName } = useBranding();
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -220,7 +222,7 @@ export const DocumentDetailModal = ({ doc, onClose }: DocumentDetailModalProps) 
                            </pre>
                            {/* Confidentiality Watermark */}
                            <div className="absolute inset-x-0 top-0 py-2 bg-amber-500 text-white text-[9px] font-black uppercase tracking-[0.5em] text-center opacity-50 z-10 pointer-events-none">
-                              Confidential Artifact &bull; Riskeez Secure Zone
+                              Confidential Artifact &bull; {appName} Secure Zone
                            </div>
                         </div>
                      </section>
@@ -262,7 +264,7 @@ export const DocumentDetailModal = ({ doc, onClose }: DocumentDetailModalProps) 
           <div className="px-10 py-6 border-t border-slate-50 bg-white flex justify-between items-center shrink-0">
              <div className="flex items-center gap-3 text-[10px] font-black text-slate-300 uppercase tracking-widest">
                 <ShieldCheck size={16} className="text-slate-200" />
-                Evidence Governance: Riskeez-Secured
+                Evidence Governance: {appName}-Secured
              </div>
              <div className="flex gap-4">
                 <Button variant="secondary" icon={Download} className="font-black h-11 px-6">Export PDF Intelligence Report</Button>

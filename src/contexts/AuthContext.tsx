@@ -26,15 +26,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshState = async () => {
     setIsLoading(true);
-    const currentUser = authService.getCurrentUser();
-    const currentOrg = await organizationService.getOrganization();
-    setUser(currentUser);
+    const storedUser = authService.getCurrentUser();
+    const jwt = localStorage.getItem('riskeez_jwt');
+
+    // If user appears logged in but JWT is missing, clear the stale session
+    if (storedUser && !jwt) {
+      authService.clearCurrentSession();
+      setUser(null);
+      setOrganization(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // If JWT is older than 12 hours, silently clear the session
+    if (jwt) {
+      try {
+        const payload = JSON.parse(atob(jwt.split('.')[1]));
+        if (Date.now() - payload.iat * 1000 > 12 * 60 * 60 * 1000) {
+          authService.clearCurrentSession();
+          setUser(null);
+          setOrganization(null);
+          setIsLoading(false);
+          return;
+        }
+      } catch {
+        // Malformed JWT — clear it
+        authService.clearCurrentSession();
+        setUser(null);
+        setOrganization(null);
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Only fetch org data when authenticated — avoids triggering 401 loops pre-login
+    let currentOrg = null;
+    if (storedUser && jwt) {
+      currentOrg = await organizationService.getOrganization().catch(() => null);
+    }
+    setUser(storedUser);
     setOrganization(currentOrg);
     setIsLoading(false);
   };
 
   useEffect(() => {
     refreshState();
+  }, []);
+
+  // Re-check token expiry every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshState();
+    }, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Re-check token expiry whenever the window regains focus
+  useEffect(() => {
+    window.addEventListener('focus', refreshState);
+    return () => window.removeEventListener('focus', refreshState);
   }, []);
 
   const login = async (email: string, pass: string) => {
