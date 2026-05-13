@@ -28,7 +28,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { aiService, AIResponse } from '../../services/aiService';
 import { auditLogService } from '../../services/auditLogService';
 import { notificationService } from '../../services/notificationService';
-import { NotificationType } from '../../types/notification';
 import { Notification } from '../../types/notification';
 import { FileText, Bell, HelpCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -137,11 +136,6 @@ export const Dashboard = ({ store, setActiveTab, onNavigate }: DashboardProps) =
       setAiDetails(resp);
       success(t('notifications.insightsRefreshed'), t('notifications.insightsRefreshedDesc'));
       await auditLogService.log('ai_dashboard_insights_refreshed', 'System', 'Dashboard insights refreshed via AI analytic engine');
-      await notificationService.addNotification({
-        title: t('notifications.insightsTitle'),
-        message: t('notifications.insightsMessage'),
-        type: NotificationType.SUCCESS
-      });
     } catch (e) {
       console.error(e);
     } finally {
@@ -157,11 +151,10 @@ export const Dashboard = ({ store, setActiveTab, onNavigate }: DashboardProps) =
   }, []);
 
   useEffect(() => {
-    handleReanalyze();
     loadNotifications();
     window.addEventListener('riskeez_notifications_updated', loadNotifications);
     return () => window.removeEventListener('riskeez_notifications_updated', loadNotifications);
-  }, []);
+  }, [loadNotifications]);
 
   const markRead = async (id: string) => {
     await notificationService.markNotificationRead(id);
