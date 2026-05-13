@@ -23,6 +23,7 @@ import { ComplianceDashboard } from './ComplianceDashboard';
 import { ExecutiveDashboard } from './ExecutiveDashboard';
 import { APP_CONFIG } from '../../config/appConfig';
 import { RiskLevel, RiskStatus } from '../../types';
+import { printMonitoringReport } from '../../utils/printReport';
 
 interface MonitoringPageProps {
   store: any;
@@ -131,7 +132,7 @@ export const MonitoringPage: React.FC<MonitoringPageProps> = ({ store }) => {
             <Button
               variant="secondary"
               icon={Printer}
-              onClick={() => window.print()}
+              onClick={() => printMonitoringReport(activeTab, apiSummary, orgName)}
             >
               {t('monitoring.exportPdf') || 'PDF İxrac'}
             </Button>
