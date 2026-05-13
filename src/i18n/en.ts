@@ -81,6 +81,7 @@ export const en = {
   },
   nav: {
     dashboard: 'Dashboard',
+    monitoring: 'Monitoring',
     assessments: 'Assessments',
     riskRegister: 'Risk Register',
     controls: 'Controls',
@@ -91,6 +92,25 @@ export const en = {
     usersPermissions: 'Users & Permissions',
     auditLog: 'Audit Log',
     securityEvents: 'Event Encyclopedia'
+  },
+  monitoring: {
+    title: 'Monitoring',
+    riskTab: 'Risk Monitoring',
+    complianceTab: 'Compliance & Controls',
+    executiveTab: 'Executive Summary',
+    exportPdf: 'Export PDF',
+    overallScore: 'Overall Risk Score',
+    controlsStatus: 'Controls Status',
+    assessmentCompletion: 'Assessment Completion',
+    implemented: 'Implemented',
+    partial: 'Partial',
+    notImplemented: 'Not Implemented',
+    complianceRate: 'Compliance Rate',
+    riskPosture: 'Risk Posture',
+    compliancePosture: 'Compliance Posture',
+    controlsPosture: 'Controls Posture',
+    boardReady: 'Board-ready executive summary',
+    printDate: 'Print date',
   },
   dashboard: {
     title: 'Dashboard',

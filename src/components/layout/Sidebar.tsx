@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  LayoutDashboard,
+  Monitor,
   ClipboardCheck,
   ShieldAlert,
   ShieldCheck,
@@ -28,7 +28,7 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-  { id: 'dashboard',        path: '/dashboard',        label: 'nav.dashboard',   icon: LayoutDashboard },
+  { id: 'monitoring',       path: '/monitoring',       label: 'nav.monitoring',  icon: Monitor },
   { id: 'assessments',      path: '/assessments',      label: 'nav.assessments', icon: ClipboardCheck },
   { id: 'risks',            path: '/risks',            label: 'nav.riskRegister',icon: ShieldAlert },
   { id: 'controls',         path: '/controls',         label: 'nav.controls',    icon: ShieldCheck },
@@ -49,7 +49,7 @@ export const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) => {
   const isViewer = user?.role === Role.VIEWER;
 
   const visibleItems = isViewer
-    ? NAV_ITEMS.filter(item => item.id === 'dashboard')
+    ? NAV_ITEMS.filter(item => item.id === 'monitoring')
     : NAV_ITEMS;
 
   return (
@@ -71,7 +71,7 @@ export const Sidebar = ({ isSidebarOpen, setIsSidebarOpen }: SidebarProps) => {
           <NavLink
             key={item.id}
             to={item.path}
-            end={item.id === 'dashboard'}
+            end={item.id === 'monitoring'}
             className={({ isActive }) =>
               `w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all group relative ${
                 isActive

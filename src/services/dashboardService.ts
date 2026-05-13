@@ -55,6 +55,9 @@ export interface DashboardSummary {
   completedAssessments: number;
   pendingAssessments: number;
   totalControls: number;
+  implementedControls: number;
+  partialControls: number;
+  missingControls: number;
   totalDocuments: number;
   risksWithoutControls: number;
   recentAuditActivity: Array<{

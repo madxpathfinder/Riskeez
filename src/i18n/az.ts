@@ -81,6 +81,7 @@ export const az = {
   },
   nav: {
     dashboard: 'İdarə paneli',
+    monitoring: 'Monitorinq',
     assessments: 'Qiymətləndirmələr',
     riskRegister: 'Risk reyestri',
     controls: 'Nəzarət tədbirləri',
@@ -91,6 +92,25 @@ export const az = {
     usersPermissions: 'İstifadəçilər və icazələr',
     auditLog: 'Audit jurnalı',
     securityEvents: 'Hadisə Ensiklopediyası'
+  },
+  monitoring: {
+    title: 'Monitorinq',
+    riskTab: 'Risk Monitorinqi',
+    complianceTab: 'Uyğunluq & Nəzarət',
+    executiveTab: 'İcraiyyə İcmalı',
+    exportPdf: 'PDF İxrac',
+    overallScore: 'Ümumi Risk Skoru',
+    controlsStatus: 'Nəzarət Statusu',
+    assessmentCompletion: 'Qiymətləndirmə Tamamlanması',
+    implemented: 'Tətbiq edilmiş',
+    partial: 'Qismən',
+    notImplemented: 'Tətbiq edilməmiş',
+    complianceRate: 'Uyğunluq Faizi',
+    riskPosture: 'Risk Mövqeyi',
+    compliancePosture: 'Uyğunluq Mövqeyi',
+    controlsPosture: 'Nəzarət Mövqeyi',
+    boardReady: 'Lövhə üçün hazırlanmış icmal',
+    printDate: 'Çap tarixi',
   },
   dashboard: {
     title: 'İdarə paneli',

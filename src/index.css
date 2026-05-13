@@ -37,3 +37,27 @@
   }
 }
 
+/* ── Print / PDF export styles ───────────────────────────────────────────── */
+.print-only { display: none; }
+
+@media print {
+  /* Hide everything at the top level except the print area */
+  body > * { display: none !important; }
+  #monitoring-print-area { display: block !important; }
+
+  /* Hide UI chrome that should not appear in the PDF */
+  .no-print { display: none !important; }
+
+  /* Ensure the print area is always visible */
+  .print-only { display: block !important; }
+
+  /* Page setup */
+  @page { size: A4 portrait; margin: 1.5cm; }
+
+  /* Preserve colours when printing */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

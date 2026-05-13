@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 // Pages
 import { Dashboard } from './components/dashboard/Dashboard';
+import { MonitoringPage } from './components/monitoring/MonitoringPage';
 import { AssessmentsPage } from './components/assessments/AssessmentsPage';
 import { RiskRegisterPage } from './components/risks/RiskRegisterPage';
 import { ControlsPage } from './components/controls/ControlsPage';
@@ -32,7 +33,8 @@ import { BrandingProvider, useBranding } from './contexts/BrandingContext';
 
 // ── Tab ↔ Path mapping ───────────────────────────────────────────────────────
 const PATH_TO_TAB: Record<string, string> = {
-  dashboard: 'dashboard',
+  monitoring: 'monitoring',
+  dashboard: 'monitoring',
   risks: 'risks',
   assessments: 'assessments',
   controls: 'controls',
@@ -46,6 +48,7 @@ const PATH_TO_TAB: Record<string, string> = {
 };
 
 export const TAB_TO_PATH: Record<string, string> = {
+  monitoring: '/monitoring',
   dashboard: '/dashboard',
   risks: '/risks',
   assessments: '/assessments',
@@ -89,8 +92,8 @@ function AppContent() {
   const [isSetupNeeded, setIsSetupNeeded] = useState(false);
 
   // Derive active tab from URL path
-  const pathSegment = location.pathname.split('/')[1] || 'dashboard';
-  const activeTab = PATH_TO_TAB[pathSegment] || 'dashboard';
+  const pathSegment = location.pathname.split('/')[1] || 'monitoring';
+  const activeTab = PATH_TO_TAB[pathSegment] || 'monitoring';
 
   // Navigation helper — maps tab IDs to clean URL paths
   const handleTabChange = useCallback((tab: string) => {
@@ -177,12 +180,13 @@ function AppContent() {
               className="max-w-[1400px] mx-auto"
             >
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/dashboard" element={<Dashboard {...sharedProps} setActiveTab={handleTabChange} />} />
+                <Route path="/" element={<Navigate to="/monitoring" replace />} />
+                <Route path="/monitoring" element={<MonitoringPage {...sharedProps} />} />
+                <Route path="/dashboard" element={<Navigate to="/monitoring" replace />} />
                 <Route path="/risks" element={<RiskRegisterPage {...sharedProps} />} />
                 <Route path="/risks/:id" element={<RiskRegisterPage {...sharedProps} />} />
                 {isViewer ? (
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/monitoring" replace />} />
                 ) : (
                   <>
                     <Route path="/assessments" element={<AssessmentsPage {...sharedProps} />} />
@@ -199,7 +203,7 @@ function AppContent() {
                     <Route path="/security-events" element={<SecurityEventsPage />} />
                     <Route path="/security-events/:eventId" element={<SecurityEventsPage />} />
                     <Route path="/securitylog/encyclopedia/event.aspx" element={<SecurityEventsPage />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="*" element={<Navigate to="/monitoring" replace />} />
                   </>
                 )}
               </Routes>
@@ -234,7 +238,7 @@ function AppContent() {
               </div>
               <div className="flex-grow overflow-y-auto p-4 space-y-2">
                 {Object.entries(TAB_TO_PATH)
-                  .filter(([tab]) => !isViewer || tab === 'dashboard')
+                  .filter(([tab]) => !isViewer || tab === 'monitoring')
                   .map(([tab, path]) => (
                     <NavLink
                       key={tab}
