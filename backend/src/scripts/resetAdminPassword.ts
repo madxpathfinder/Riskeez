@@ -2,27 +2,33 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import * as readline from 'readline';
+import { resolve } from 'path';
 
-dotenv.config();
+// .env is at backend root — two levels up from src/scripts/
+dotenv.config({ path: resolve(process.cwd(), '.env') });
 
 async function resetPassword() {
   const args = process.argv.slice(2);
   const emailArgIdx = args.indexOf('--email');
 
   if (emailArgIdx === -1 || !args[emailArgIdx + 1]) {
-    console.error('Error: Please provide an email address using --email');
     console.error('Usage: npm run admin:reset-password -- --email admin@example.com');
     process.exit(1);
   }
 
   const email = args[emailArgIdx + 1];
 
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL not found. Make sure you run this from /var/www/riskeez/backend');
+    process.exit(1);
+  }
+
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
     const check = await pool.query('SELECT id, name, role FROM users WHERE email = $1', [email]);
     if (check.rows.length === 0) {
-      console.error(`Error: No user found with email: ${email}`);
+      console.error(`No user found with email: ${email}`);
       process.exit(1);
     }
     const user = check.rows[0];
@@ -37,13 +43,12 @@ async function resetPassword() {
     });
 
     if (newPassword.length < 8) {
-      console.error('Error: Password must be at least 8 characters.');
+      console.error('Password must be at least 8 characters.');
       process.exit(1);
     }
 
     const hash = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [hash, email]);
-
     console.log(`\nPassword successfully reset for: ${email}`);
   } finally {
     await pool.end();
