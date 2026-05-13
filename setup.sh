@@ -214,7 +214,7 @@ install_node() {
 
   info "Installing Node.js 20 LTS via NodeSource…"
   apt_install_if_missing curl
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - -qq
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs -qq
   success "Node.js $(node --version) installed."
 }
@@ -383,7 +383,7 @@ create_admin_user() {
 
   info "Hashing admin password…"
   local hashed_pw
-  hashed_pw=$(node -e "
+  hashed_pw=$(cd "$BACKEND_DIR" && node -e "
     const b = require('bcryptjs');
     b.hash(process.argv[1], 10, (e, h) => { if(e) { process.stderr.write(e.message); process.exit(1); } process.stdout.write(h); });
   " "$ADMIN_PASSWORD" 2>/dev/null) || die "Failed to hash password — is bcryptjs installed in ${BACKEND_DIR}/node_modules?"
