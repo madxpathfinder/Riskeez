@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import {
@@ -45,6 +45,15 @@ export const MonitoringPage: React.FC<MonitoringPageProps> = ({ store }) => {
 
   const [activeTab, setActiveTab] = useState<TabKey>('risk');
   const [isExporting, setIsExporting] = useState(false);
+
+  const riskRef = useRef<HTMLDivElement>(null);
+  const complianceRef = useRef<HTMLDivElement>(null);
+  const executiveRef = useRef<HTMLDivElement>(null);
+  const tabRefs: Record<TabKey, React.RefObject<HTMLDivElement>> = {
+    risk: riskRef,
+    compliance: complianceRef,
+    executive: executiveRef,
+  };
 
   // Filter state
   const [timeRange, setTimeRange] = useState('');
@@ -138,7 +147,7 @@ export const MonitoringPage: React.FC<MonitoringPageProps> = ({ store }) => {
                 activeTab,
                 apiSummary,
                 orgName,
-                null,
+                tabRefs[activeTab].current,
                 () => setIsExporting(true),
                 () => setIsExporting(false),
               )}
@@ -204,7 +213,7 @@ export const MonitoringPage: React.FC<MonitoringPageProps> = ({ store }) => {
       <div id="monitoring-print-area">
 
         {/* ── Tab 1: Risk Monitorinqi ── */}
-        <div className={activeTab === 'risk' ? 'block' : 'hidden'}>
+        <div ref={riskRef} className={activeTab === 'risk' ? 'block' : 'hidden'}>
           {/* Print header for this tab */}
           <div className="print-only mb-6">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{orgName}</p>
@@ -333,12 +342,12 @@ export const MonitoringPage: React.FC<MonitoringPageProps> = ({ store }) => {
         </div>
 
         {/* ── Tab 2: Uyğunluq & Nəzarət ── */}
-        <div className={activeTab === 'compliance' ? 'block' : 'hidden'}>
+        <div ref={complianceRef} className={activeTab === 'compliance' ? 'block' : 'hidden'}>
           <ComplianceDashboard summary={apiSummary} organizationName={orgName} />
         </div>
 
         {/* ── Tab 3: İcraiyyə İcmalı ── */}
-        <div className={activeTab === 'executive' ? 'block' : 'hidden'}>
+        <div ref={executiveRef} className={activeTab === 'executive' ? 'block' : 'hidden'}>
           <ExecutiveDashboard summary={apiSummary} organizationName={orgName} />
         </div>
       </div>
