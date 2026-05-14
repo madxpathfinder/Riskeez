@@ -2,13 +2,10 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import * as readline from 'readline';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-// Script is at backend/src/scripts/ — .env is at backend/
-dotenv.config({ path: join(__dirname, '../../.env') });
+// npm run scripts are always executed from the backend/ directory
+dotenv.config({ path: join(process.cwd(), '.env') });
 
 async function resetPassword() {
   const args = process.argv.slice(2);
