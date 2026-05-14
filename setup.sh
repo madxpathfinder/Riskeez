@@ -410,6 +410,11 @@ create_admin_user() {
     "SELECT email FROM users WHERE LOWER(role) = 'admin' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
 
   if [[ -n "$existing_email" ]]; then
+    # If another (non-admin) user already holds the target email, remove it
+    # to avoid a unique constraint violation when we update the admin's email.
+    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
+      "DELETE FROM users WHERE email='${ADMIN_EMAIL//\'/\'\'}' AND LOWER(role) != 'admin';" 2>/dev/null || true
+
     # Admin exists — always update email, name, and password so the user
     # can always log in with whatever they entered in this run of setup.sh.
     info "Updating existing admin '${existing_email}' → '${ADMIN_EMAIL}'…"
