@@ -105,7 +105,11 @@ interactive_wizard() {
   fi
 
   if [[ -z "$ADMIN_EMAIL" ]]; then
-    read -rp "  Admin email address: " ADMIN_EMAIL
+    while true; do
+      read -rp "  Admin email address: " ADMIN_EMAIL
+      if [[ "$ADMIN_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then break; fi
+      warn "Please enter a valid email address (e.g. admin@example.com)."
+    done
   fi
 
   if [[ -z "$ADMIN_PASSWORD" ]]; then
@@ -157,6 +161,7 @@ interactive_wizard() {
 validate_inputs() {
   [[ -z "$ADMIN_NAME" ]]     && die "Admin name is required."
   [[ -z "$ADMIN_EMAIL" ]]    && die "Admin email is required."
+  [[ "$ADMIN_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] || die "Invalid admin email: '${ADMIN_EMAIL}'. Must be a valid email address (e.g. admin@example.com)."
   [[ -z "$ADMIN_PASSWORD" ]] && die "Admin password is required."
   [[ -z "$ORG_NAME" ]]       && die "Organisation name is required."
   [[ -z "$SERVER_IP" ]]      && die "Server IP / hostname is required."
@@ -386,7 +391,8 @@ create_admin_user() {
   hashed_pw=$(cd "$BACKEND_DIR" && node -e "
     const b = require('bcryptjs');
     b.hash(process.argv[1], 10, (e, h) => { if(e) { process.stderr.write(e.message); process.exit(1); } process.stdout.write(h); });
-  " "$ADMIN_PASSWORD" 2>/dev/null) || die "Failed to hash password — is bcryptjs installed in ${BACKEND_DIR}/node_modules?"
+  " "$ADMIN_PASSWORD") || die "Failed to hash password — is bcryptjs installed in ${BACKEND_DIR}/node_modules?"
+  [[ -n "$hashed_pw" ]] || die "Password hashing returned empty result."
 
   local org_id="org-$(date +%s)"
   local user_id="usr-$(date +%s)-admin"
@@ -423,11 +429,11 @@ create_admin_user() {
              '${ADMIN_NAME//\'/\'\'}',
              '${ADMIN_EMAIL//\'/\'\'}',
              '${hashed_pw}',
-             '${admin_role}', 'active', NOW())
+             '${admin_role}', 'Active', NOW())
      ON CONFLICT (email) DO UPDATE
        SET password_hash = EXCLUDED.password_hash,
            role = EXCLUDED.role,
-           status = 'active';"
+           status = 'Active';"
   success "Admin user created/updated: ${ADMIN_EMAIL} (role: ${admin_role})"
 }
 
