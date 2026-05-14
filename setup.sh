@@ -404,39 +404,52 @@ create_admin_user() {
     success "Organisation created (id: ${org_id})."
   fi
 
-  # Check if any admin user already exists (by role, not email).
-  local existing_email
-  existing_email=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
-    "SELECT email FROM users WHERE LOWER(role) = 'admin' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+  # If a user with the target email already exists, just update that user
+  # (promote to Admin if needed, set new password). This avoids all
+  # unique-constraint conflicts regardless of how many admins exist.
+  local target_exists
+  target_exists=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
+    "SELECT COUNT(*) FROM users WHERE email='${ADMIN_EMAIL//\'/\'\'}';" 2>/dev/null | tr -d '[:space:]' || echo "0")
 
-  if [[ -n "$existing_email" ]]; then
-    # If another (non-admin) user already holds the target email, remove it
-    # to avoid a unique constraint violation when we update the admin's email.
-    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
-      "DELETE FROM users WHERE email='${ADMIN_EMAIL//\'/\'\'}' AND LOWER(role) != 'admin';" 2>/dev/null || true
-
-    # Admin exists — always update email, name, and password so the user
-    # can always log in with whatever they entered in this run of setup.sh.
-    info "Updating existing admin '${existing_email}' → '${ADMIN_EMAIL}'…"
+  if [[ "$target_exists" -gt 0 ]]; then
+    info "User '${ADMIN_EMAIL}' exists — updating password and promoting to Admin…"
     PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
       "UPDATE users
-          SET email         = '${ADMIN_EMAIL//\'/\'\'}',
-              name          = '${ADMIN_NAME//\'/\'\'}',
+          SET name          = '${ADMIN_NAME//\'/\'\'}',
               password_hash = '${hashed_pw}',
+              role          = 'Admin',
               status        = 'Active'
-        WHERE LOWER(role) = 'admin';"
+        WHERE email = '${ADMIN_EMAIL//\'/\'\'}';"
     success "Admin credentials updated: ${ADMIN_EMAIL}"
   else
-    local user_id="usr-$(date +%s)-admin"
-    info "Creating admin user '${ADMIN_EMAIL}'…"
-    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
-      "INSERT INTO users (id, organization_id, name, email, password_hash, role, status, created_at)
-       VALUES ('${user_id}', '${org_id}',
-               '${ADMIN_NAME//\'/\'\'}',
-               '${ADMIN_EMAIL//\'/\'\'}',
-               '${hashed_pw}',
-               'Admin', 'Active', NOW());"
-    success "Admin user created: ${ADMIN_EMAIL}"
+    # No user with that email — check if any admin exists and update their email,
+    # or insert a brand new admin.
+    local existing_admin_email
+    existing_admin_email=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
+      "SELECT email FROM users WHERE LOWER(role) = 'admin' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+
+    if [[ -n "$existing_admin_email" ]]; then
+      info "Updating existing admin '${existing_admin_email}' → '${ADMIN_EMAIL}'…"
+      PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
+        "UPDATE users
+            SET email         = '${ADMIN_EMAIL//\'/\'\'}',
+                name          = '${ADMIN_NAME//\'/\'\'}',
+                password_hash = '${hashed_pw}',
+                status        = 'Active'
+          WHERE LOWER(role) = 'admin';"
+      success "Admin credentials updated: ${ADMIN_EMAIL}"
+    else
+      local user_id="usr-$(date +%s)-admin"
+      info "Creating admin user '${ADMIN_EMAIL}'…"
+      PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
+        "INSERT INTO users (id, organization_id, name, email, password_hash, role, status, created_at)
+         VALUES ('${user_id}', '${org_id}',
+                 '${ADMIN_NAME//\'/\'\'}',
+                 '${ADMIN_EMAIL//\'/\'\'}',
+                 '${hashed_pw}',
+                 'Admin', 'Active', NOW());"
+      success "Admin user created: ${ADMIN_EMAIL}"
+    fi
   fi
 }
 
