@@ -1,11 +1,17 @@
-import dotenv from 'dotenv';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
 import bcrypt from 'bcryptjs';
 import { Pool } from 'pg';
 import * as readline from 'readline';
-import { join } from 'path';
 
-// npm run scripts are always executed from the backend/ directory
-dotenv.config({ path: join(process.cwd(), '.env') });
+// Read .env manually — avoids dotenv path resolution issues under tsx
+const envFile = resolve(process.cwd(), '.env');
+if (existsSync(envFile)) {
+  for (const line of readFileSync(envFile, 'utf8').split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.+)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+  }
+}
 
 async function resetPassword() {
   const args = process.argv.slice(2);
