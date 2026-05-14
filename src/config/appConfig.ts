@@ -10,7 +10,7 @@ export const APP_CONFIG = {
   // Falls back to VITE_API_URL for backward compat, then localhost for dev
   API_URL: (import.meta.env.VITE_API_BASE_URL as string)
         || (import.meta.env.VITE_API_URL as string)
-        || 'http://localhost:3001',
+        || '',
 
   AI_PROVIDER: 'gemini' as AIProviderType,
   ENABLE_LOCAL_AI: false,
