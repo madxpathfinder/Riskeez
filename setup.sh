@@ -376,16 +376,6 @@ create_admin_user() {
 
   DB_PASS=$(env_get "DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
 
-  # Check if admin already exists
-  local exists
-  exists=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
-    "SELECT COUNT(*) FROM users WHERE email='${ADMIN_EMAIL}';" 2>/dev/null || echo "0")
-
-  if [[ "$exists" -gt 0 && "$FORCE_CREATE_ADMIN" != "true" ]]; then
-    warn "Admin user '${ADMIN_EMAIL}' already exists. Use --force-create-admin to recreate."
-    return
-  fi
-
   info "Hashing admin password…"
   local hashed_pw
   hashed_pw=$(cd "$BACKEND_DIR" && node -e "
@@ -394,26 +384,15 @@ create_admin_user() {
   " "$ADMIN_PASSWORD") || die "Failed to hash password — is bcryptjs installed in ${BACKEND_DIR}/node_modules?"
   [[ -n "$hashed_pw" ]] || die "Password hashing returned empty result."
 
-  local org_id="org-$(date +%s)"
-  local user_id="usr-$(date +%s)-admin"
-  local admin_role="Admin"
-
-  # Create organisation (skip if already present and not forcing)
-  if [[ "$exists" -gt 0 && "$FORCE_CREATE_ADMIN" == "true" ]]; then
-    info "Force-recreating admin user…"
-    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
-      "DELETE FROM users WHERE email='${ADMIN_EMAIL}';"
-  fi
-
   # Ensure at least one organisation exists; reuse existing org if present.
-  local existing_org_id
-  existing_org_id=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
+  local org_id
+  org_id=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
     "SELECT id FROM organizations LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
 
-  if [[ -n "$existing_org_id" ]]; then
-    org_id="$existing_org_id"
+  if [[ -n "$org_id" ]]; then
     info "Reusing existing organisation id: ${org_id}"
   else
+    org_id="org-$(date +%s)"
     info "Creating organisation '${ORG_NAME}' (app: ${APP_NAME})…"
     PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
       "INSERT INTO organizations (id, name, app_name, created_at)
@@ -422,19 +401,35 @@ create_admin_user() {
     success "Organisation created (id: ${org_id})."
   fi
 
-  info "Inserting admin user '${ADMIN_EMAIL}'…"
-  PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
-    "INSERT INTO users (id, organization_id, name, email, password_hash, role, status, created_at)
-     VALUES ('${user_id}', '${org_id}',
-             '${ADMIN_NAME//\'/\'\'}',
-             '${ADMIN_EMAIL//\'/\'\'}',
-             '${hashed_pw}',
-             '${admin_role}', 'Active', NOW())
-     ON CONFLICT (email) DO UPDATE
-       SET password_hash = EXCLUDED.password_hash,
-           role = EXCLUDED.role,
-           status = 'Active';"
-  success "Admin user created/updated: ${ADMIN_EMAIL} (role: ${admin_role})"
+  # Check if any admin user already exists (by role, not email).
+  local existing_email
+  existing_email=$(PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -tAc \
+    "SELECT email FROM users WHERE LOWER(role) = 'admin' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || true)
+
+  if [[ -n "$existing_email" ]]; then
+    # Admin exists — always update email, name, and password so the user
+    # can always log in with whatever they entered in this run of setup.sh.
+    info "Updating existing admin '${existing_email}' → '${ADMIN_EMAIL}'…"
+    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
+      "UPDATE users
+          SET email         = '${ADMIN_EMAIL//\'/\'\'}',
+              name          = '${ADMIN_NAME//\'/\'\'}',
+              password_hash = '${hashed_pw}',
+              status        = 'Active'
+        WHERE LOWER(role) = 'admin';"
+    success "Admin credentials updated: ${ADMIN_EMAIL}"
+  else
+    local user_id="usr-$(date +%s)-admin"
+    info "Creating admin user '${ADMIN_EMAIL}'…"
+    PGPASSWORD="$DB_PASS" psql -h localhost -U riskeez_user -d riskeez -q -c \
+      "INSERT INTO users (id, organization_id, name, email, password_hash, role, status, created_at)
+       VALUES ('${user_id}', '${org_id}',
+               '${ADMIN_NAME//\'/\'\'}',
+               '${ADMIN_EMAIL//\'/\'\'}',
+               '${hashed_pw}',
+               'Admin', 'Active', NOW());"
+    success "Admin user created: ${ADMIN_EMAIL}"
+  fi
 }
 
 # ── Write ecosystem.config.js ─────────────────────────────────────────────────
