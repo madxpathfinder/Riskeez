@@ -36,6 +36,7 @@ SERVER_IP=""
 BACKEND_PORT="3001"
 FRONTEND_PORT="80"
 FORCE_CREATE_ADMIN="false"
+ADMIN_ONLY="false"
 
 # ── App name generation ───────────────────────────────────────────────────────
 # Takes the first word of the company name, capitalises it, appends " Risk".
@@ -64,6 +65,7 @@ parse_args() {
       --backend-port)       BACKEND_PORT="$2";     shift 2 ;;
       --frontend-port)      FRONTEND_PORT="$2";    shift 2 ;;
       --force-create-admin) FORCE_CREATE_ADMIN="true"; shift ;;
+      --admin-only)         ADMIN_ONLY="true"; shift ;;
       -h|--help)            usage; exit 0 ;;
       *) warn "Unknown argument: $1"; shift ;;
     esac
@@ -89,6 +91,7 @@ Options:
   --backend-port      <port>          API port (default: 3001)
   --frontend-port     <port>          Nginx listen port (default: 80)
   --force-create-admin                Recreate admin user even if already exists
+  --admin-only                        Only update admin credentials, skip all install/build steps
 
 If options are omitted the interactive wizard runs instead.
 EOF
@@ -584,6 +587,30 @@ print_summary() {
 main() {
   parse_args "$@"
   check_os
+
+  # --admin-only: just update admin credentials, skip everything else
+  if [[ "$ADMIN_ONLY" == "true" ]]; then
+    if [[ -z "$ADMIN_NAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" ]]; then
+      header "Update Admin Credentials"
+      [[ -z "$ADMIN_NAME" ]]     && { read -rp "  Admin full name: " ADMIN_NAME; }
+      [[ -z "$ADMIN_EMAIL" ]]    && { while true; do
+        read -rp "  Admin email address: " ADMIN_EMAIL
+        [[ "$ADMIN_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] && break
+        warn "Please enter a valid email address."
+      done; }
+      [[ -z "$ADMIN_PASSWORD" ]] && { while true; do
+        read -rsp "  Admin password (min 8 chars): " ADMIN_PASSWORD; echo
+        [[ ${#ADMIN_PASSWORD} -ge 8 ]] && break
+        warn "Password must be at least 8 characters."
+      done; }
+    fi
+    [[ "$ADMIN_EMAIL" =~ ^[^@]+@[^@]+\.[^@]+$ ]] || die "Invalid email: '${ADMIN_EMAIL}'"
+    [[ -z "$ADMIN_NAME" ]]     && die "Admin name is required."
+    [[ -z "$ADMIN_PASSWORD" ]] && die "Admin password is required."
+    create_admin_user
+    success "Done. Log in with: ${ADMIN_EMAIL}"
+    return
+  fi
 
   # If any required interactive field is missing, run the wizard.
   if [[ -z "$ADMIN_NAME" || -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" || \
