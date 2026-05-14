@@ -51,8 +51,11 @@ async function resetPassword() {
     }
 
     const hash = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [hash, email]);
-    console.log(`\nŞifrə uğurla sıfırlandı: ${email}`);
+    await pool.query(
+      `UPDATE users SET password_hash = $1, role = 'Admin', status = 'Active' WHERE email = $2`,
+      [hash, email]
+    );
+    console.log(`\nŞifrə sıfırlandı və Admin rolü təyin edildi: ${email}`);
   } finally {
     await pool.end();
   }
